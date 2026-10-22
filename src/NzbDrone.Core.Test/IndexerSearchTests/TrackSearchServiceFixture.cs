@@ -75,7 +75,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
                   .Setup(service => service.GetAlbums(It.IsAny<IEnumerable<int>>()))
                   .Returns(new List<Album> { album });
             Mocker.GetMock<ISearchForReleases>()
-                  .Setup(service => service.AlbumSearch(album.Id, false, false, false))
+                  .Setup(service => service.AlbumSearch(album.Id, false, false, It.IsAny<List<string>>()))
                   .Returns(Task.FromResult(decisions));
             Mocker.GetMock<IProcessDownloadDecisions>()
                   .Setup(service => service.ProcessDecisions(decisions, true))
@@ -115,7 +115,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
                   .Setup(service => service.GetAlbums(It.IsAny<IEnumerable<int>>()))
                   .Returns(new List<Album> { album });
             Mocker.GetMock<ISearchForReleases>()
-                  .Setup(service => service.AlbumSearch(album.Id, false, true, false))
+                  .Setup(service => service.AlbumSearch(album.Id, true, false, It.IsAny<List<string>>()))
                   .Returns(Task.FromResult(decisions));
             Mocker.GetMock<IProcessDownloadDecisions>()
                   .Setup(service => service.ProcessDecisions(decisions, true))
@@ -179,7 +179,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             {
                 var albumDecisions = decisions[album.Id];
                 Mocker.GetMock<ISearchForReleases>()
-                      .Setup(service => service.AlbumSearch(album.Id, false, true, false))
+                      .Setup(service => service.AlbumSearch(album.Id, true, false, It.IsAny<List<string>>()))
                       .Returns(Task.FromResult(albumDecisions));
             }
 
@@ -196,14 +196,14 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             foreach (var album in albums)
             {
                 Mocker.GetMock<ISearchForReleases>()
-                      .Verify(service => service.AlbumSearch(album.Id, false, true, false), Times.Once());
+                      .Verify(service => service.AlbumSearch(album.Id, true, false, It.IsAny<List<string>>()), Times.Once());
                 decisions[album.Id].Single().RemoteAlbum.TargetRecordingIds.Should().Equal("recording");
             }
 
-            decisions[compilationAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(1);
+            decisions[compilationAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(4);
             decisions[epAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(2);
-            decisions[singleAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(3);
-            decisions[originalAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(4);
+            decisions[singleAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(1);
+            decisions[originalAlbum.Id].Single().RemoteAlbum.TrackSearchPriority.Should().Be(3);
 
             Mocker.GetMock<IProcessDownloadDecisions>()
                   .Verify(service => service.ProcessDecisions(
@@ -212,7 +212,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
         }
 
         [Test]
-        public async Task should_give_discographies_the_highest_track_search_priority()
+        public async Task should_use_discographies_as_the_last_track_search_fallback()
         {
             var album = new Album { Id = 10, AlbumType = PrimaryAlbumType.Album.Name };
             var release = new AlbumRelease { Id = 11, AlbumId = album.Id, Album = album };
@@ -241,12 +241,12 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
                   .Setup(service => service.GetAlbums(It.IsAny<IEnumerable<int>>()))
                   .Returns(new List<Album> { album });
             Mocker.GetMock<ISearchForReleases>()
-                  .Setup(service => service.AlbumSearch(album.Id, false, true, false))
+                  .Setup(service => service.AlbumSearch(album.Id, true, false, It.IsAny<List<string>>()))
                   .Returns(Task.FromResult(new List<DownloadDecision> { decision }));
 
             var decisions = await Subject.TrackSearch(new List<int> { track.Id }, true, false);
 
-            decisions.Single().RemoteAlbum.TrackSearchPriority.Should().Be(0);
+            decisions.Single().RemoteAlbum.TrackSearchPriority.Should().Be(6);
         }
 
         [Test]
@@ -296,7 +296,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
                     Release = new ReleaseInfo { Guid = "same-release" }
                 });
                 Mocker.GetMock<ISearchForReleases>()
-                      .Setup(service => service.AlbumSearch(album.Id, false, true, false))
+                      .Setup(service => service.AlbumSearch(album.Id, true, false, It.IsAny<List<string>>()))
                       .Returns(Task.FromResult(new List<DownloadDecision> { decision }));
             }
 
@@ -304,7 +304,33 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             decisions.Should().ContainSingle();
             decisions.Single().RemoteAlbum.TargetRecordingIds.Should().BeEquivalentTo("recording-1", "recording-2");
-            decisions.Single().RemoteAlbum.TrackSearchPriority.Should().Be(1);
+            decisions.Single().RemoteAlbum.TrackSearchPriority.Should().Be(3);
+        }
+
+        [Test]
+        public async Task should_search_for_the_song_title_before_album_fallbacks()
+        {
+            var data = GivenSongModeTrack(false);
+            data.Track.Title = "A song from an album";
+            var directDecision = new DownloadDecision(new RemoteAlbum
+            {
+                TargetRecordingIds = new List<string> { data.Track.ForeignRecordingId },
+                TrackSearchPriority = 0
+            });
+            var unrelatedDecision = new DownloadDecision(new RemoteAlbum());
+            var sequence = new MockSequence();
+            Mocker.GetMock<ISearchForReleases>().InSequence(sequence)
+                .Setup(service => service.TrackSearch(data.Track, false, false))
+                .ReturnsAsync(new List<DownloadDecision> { directDecision, unrelatedDecision });
+            Mocker.GetMock<ISearchForReleases>().InSequence(sequence)
+                .Setup(service => service.AlbumSearch(10, false, false, It.IsAny<List<string>>()))
+                .ReturnsAsync(data.Decisions);
+
+            var decisions = await Subject.TrackSearch(new List<int> { data.Track.Id }, false, false);
+
+            decisions.Should().BeEquivalentTo(new[] { directDecision, data.Decisions.Single() });
+            Mocker.GetMock<ISearchForReleases>().Verify(service => service.TrackSearch(data.Track, false, false), Times.Once());
+            Mocker.GetMock<ISearchForReleases>().Verify(service => service.AlbumSearch(10, false, false, It.IsAny<List<string>>()), Times.Once());
         }
 
         [TestCase("Album", true)]
@@ -370,7 +396,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
                   .Setup(service => service.GetAlbums(It.IsAny<IEnumerable<int>>()))
                   .Returns(new List<Album> { metadataAlbum });
             Mocker.GetMock<ISearchForReleases>()
-                  .Setup(service => service.AlbumSearch(20, false, true, false))
+                  .Setup(service => service.AlbumSearch(20, true, false, It.IsAny<List<string>>()))
                   .Returns(Task.FromResult(decisions));
 
             var result = await Subject.TrackSearch(new List<int> { selectedTrack.Id }, true, false);
@@ -385,7 +411,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             Mocker.GetMock<ITrackService>()
                   .Verify(service => service.SetMonitored(It.Is<IEnumerable<int>>(ids => ids.SequenceEqual(new[] { matchingTrack.Id })), true), Times.Once());
             Mocker.GetMock<ISearchForReleases>()
-                  .Verify(service => service.AlbumSearch(metadataAlbum.Id, false, true, false), Times.Once());
+                  .Verify(service => service.AlbumSearch(metadataAlbum.Id, true, false, It.IsAny<List<string>>()), Times.Once());
             result.Single().RemoteAlbum.TargetRecordingIds.Should().Equal("recording");
         }
 
@@ -404,7 +430,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             Subject.Execute(new MissingAlbumSearchCommand(data.Artist.Id));
 
             Mocker.GetMock<ISearchForReleases>()
-                  .Verify(service => service.AlbumSearch(10, false, false, false), Times.Once());
+                  .Verify(service => service.AlbumSearch(10, false, false, It.IsAny<List<string>>()), Times.Once());
             data.Decisions.Single().RemoteAlbum.TargetRecordingIds.Should().Equal(data.Track.ForeignRecordingId);
         }
 
@@ -426,7 +452,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             Subject.Execute(new CutoffUnmetAlbumSearchCommand(data.Artist.Id));
 
             Mocker.GetMock<ISearchForReleases>()
-                  .Verify(service => service.AlbumSearch(10, false, false, false), Times.Once());
+                  .Verify(service => service.AlbumSearch(10, false, false, It.IsAny<List<string>>()), Times.Once());
             data.Decisions.Single().RemoteAlbum.TargetRecordingIds.Should().Equal(data.Track.ForeignRecordingId);
         }
     }

@@ -191,6 +191,16 @@ namespace NzbDrone.Core.IndexerSearch
                 return new List<DownloadDecision>();
             }
 
+            var allDecisions = new List<DownloadDecision>();
+
+            foreach (var track in tracks.Where(track => track.ForeignRecordingId.IsNotNullOrWhiteSpace() && track.Title.IsNotNullOrWhiteSpace())
+                                        .DistinctBy(track => track.ForeignRecordingId))
+            {
+                var trackDecisions = await _releaseSearchService.TrackSearch(track, userInvokedSearch, interactiveSearch);
+                allDecisions.AddRange((trackDecisions ?? new List<DownloadDecision>())
+                    .Where(decision => decision.RemoteAlbum.TrackSearchPriority == 0));
+            }
+
             DiscoverSongSearchAlbums(tracks, targetRecordingIds);
 
             var candidateReleases = _releaseService.GetReleasesByRecordingIds(targetRecordingIds) ?? new List<AlbumRelease>();
@@ -235,18 +245,17 @@ namespace NzbDrone.Core.IndexerSearch
                                                .OrderBy(GetTrackSearchPriority)
                                                .ThenBy(album => album.ReleaseDate ?? DateTime.MaxValue)
                                                .ToList();
-            var allDecisions = new List<DownloadDecision>();
 
             foreach (var album in candidateAlbums)
             {
                 var albumTargetRecordingIds = targetRecordingIdsByAlbum[album.Id].ToList();
-                var decisions = await _releaseSearchService.AlbumSearch(album.Id, false, userInvokedSearch, interactiveSearch);
+                var decisions = await _releaseSearchService.AlbumSearch(album.Id, userInvokedSearch, interactiveSearch, albumTargetRecordingIds);
 
                 foreach (var decision in decisions)
                 {
                     decision.RemoteAlbum.TargetRecordingIds = albumTargetRecordingIds;
                     decision.RemoteAlbum.TrackSearchPriority = decision.RemoteAlbum.ParsedAlbumInfo?.Discography == true ?
-                        0 :
+                        6 :
                         GetTrackSearchPriority(album) + 1;
                 }
 
@@ -377,7 +386,7 @@ namespace NzbDrone.Core.IndexerSearch
 
         private static int GetTrackSearchPriority(Album album)
         {
-            if (album.SecondaryTypes.Contains(SecondaryAlbumType.Compilation))
+            if (string.Equals(album.AlbumType, PrimaryAlbumType.Single.Name, StringComparison.InvariantCultureIgnoreCase))
             {
                 return 0;
             }
@@ -387,14 +396,14 @@ namespace NzbDrone.Core.IndexerSearch
                 return 1;
             }
 
-            if (string.Equals(album.AlbumType, PrimaryAlbumType.Single.Name, StringComparison.InvariantCultureIgnoreCase))
+            if (album.SecondaryTypes.Contains(SecondaryAlbumType.Compilation))
             {
-                return 2;
+                return 3;
             }
 
             if (string.Equals(album.AlbumType, PrimaryAlbumType.Album.Name, StringComparison.InvariantCultureIgnoreCase))
             {
-                return 3;
+                return 2;
             }
 
             return 4;

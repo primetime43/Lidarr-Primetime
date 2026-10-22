@@ -9,6 +9,7 @@ using Moq;
 using NUnit.Framework;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
+using NzbDrone.Core.DecisionEngine;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Download.TrackedDownloads;
 using NzbDrone.Core.MediaFiles;
@@ -98,6 +99,54 @@ namespace NzbDrone.Core.Test.MediaFiles
         {
             Mocker.GetMock<IDiskScanService>().Setup(c => c.GetAudioFiles(It.IsAny<string>(), It.IsAny<bool>()))
                   .Returns(System.Array.Empty<IFileInfo>());
+        }
+
+        [TestCase(ImportMode.Auto, true, true, false, true)]
+        [TestCase(ImportMode.Auto, false, true, false, false)]
+        [TestCase(ImportMode.Copy, true, true, false, false)]
+        [TestCase(ImportMode.Move, false, true, false, false)]
+        [TestCase(ImportMode.Auto, true, false, false, false)]
+        [TestCase(ImportMode.Auto, true, true, true, false)]
+        public void should_discard_unwanted_download_files_only_after_all_targets_import_and_files_can_move(
+            ImportMode mode, bool canMove, bool allTargetsImported, bool existingFile, bool discard)
+        {
+            var unwantedPath = Path.Combine(_subFolders[0], "unwanted.flac");
+            FileSystem.AddFile(unwantedPath, new MockFileData("unwanted"));
+            var audioPaths = new[] { _audioFiles[0], unwantedPath };
+            Mocker.GetMock<IDiskScanService>().Setup(service => service.GetAudioFiles(It.IsAny<string>(), It.IsAny<bool>()))
+                .Returns(() => audioPaths.Where(FileSystem.File.Exists).Select(path => DiskProvider.GetFileInfo(path)).ToArray());
+            var wanted = new LocalTrack
+            {
+                Path = _audioFiles[0],
+                Tracks = new List<Track> { new Track { ForeignRecordingId = "wanted" } }
+            };
+            var unwanted = new LocalTrack
+            {
+                Path = unwantedPath,
+                ExistingFile = existingFile,
+                Tracks = new List<Track> { new Track { ForeignRecordingId = "unwanted" } }
+            };
+            var results = new List<ImportResult>
+            {
+                new ImportResult(new ImportDecision<LocalTrack>(wanted)),
+                new ImportResult(new ImportDecision<LocalTrack>(unwanted,
+                    new Rejection("Track was not targeted by this download")), "Track was not targeted by this download")
+            };
+            var item = _trackedDownload.DownloadItem;
+            item.CanMoveFiles = canMove;
+            item.TargetRecordingIds = allTargetsImported ? new List<string> { "wanted" } : new List<string> { "wanted", "missing" };
+            Mocker.GetMock<IImportApprovedTracks>()
+                .Setup(service => service.Import(It.IsAny<List<ImportDecision<LocalTrack>>>(), true, item, mode))
+                .Callback(() => FileSystem.RemoveFile(_audioFiles[0]))
+                .Returns(results);
+
+            Subject.ProcessPath(_subFolders[0], mode, new Artist(), item);
+
+            FileSystem.File.Exists(unwantedPath).Should().Be(!discard);
+            if (!discard && (mode == ImportMode.Move || (mode == ImportMode.Auto && canMove)))
+            {
+                ExceptionVerification.ExpectedWarns(1);
+            }
         }
 
         [Test]

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -483,6 +484,37 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
                   .Verify(v => v.PublishEvent(It.IsAny<DownloadCompletedEvent>()), Times.Never());
 
             _trackedDownload.State.Should().Be(TrackedDownloadState.ImportFailed);
+        }
+
+        [TestCase("target", "target", false)]
+        [TestCase("other", "unrelated", false)]
+        [TestCase("target", "second", true)]
+        public void should_require_each_requested_recording_instead_of_counting_imported_tracks(string first, string second, bool complete)
+        {
+            _trackedDownload.RemoteAlbum.TargetRecordingIds = new List<string> { "target", "second" };
+            var results = new[] { first, second }.Select(recording => new ImportResult(new ImportDecision<LocalTrack>(new LocalTrack
+            {
+                Tracks = new List<Track> { new Track { ForeignRecordingId = recording } }
+            }))).ToList();
+
+            Subject.VerifyImport(_trackedDownload, results).Should().Be(complete);
+        }
+
+        [Test]
+        public void should_preserve_requested_recordings_when_client_returns_a_separate_import_item()
+        {
+            var importItem = new DownloadClientItem { OutputPath = _trackedDownload.DownloadItem.OutputPath };
+            _trackedDownload.RemoteAlbum.TargetRecordingIds = new List<string> { "target", "second" };
+            Mocker.GetMock<IProvideImportItemService>()
+                .Setup(service => service.ProvideImportItem(It.IsAny<DownloadClientItem>(), It.IsAny<DownloadClientItem>()))
+                .Returns(importItem);
+            Mocker.GetMock<IDownloadedTracksImportService>()
+                .Setup(service => service.ProcessPath(It.IsAny<string>(), ImportMode.Auto, It.IsAny<Artist>(), importItem))
+                .Returns(new List<ImportResult>());
+
+            Subject.Import(_trackedDownload);
+
+            importItem.TargetRecordingIds.Should().Equal("target", "second");
         }
 
         private void AssertImported()

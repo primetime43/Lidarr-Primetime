@@ -30,9 +30,9 @@ namespace NzbDrone.Core.DecisionEngine
         {
             var comparers = new List<CompareDelegate>
             {
+                CompareTrackSearchPriority,
                 CompareQuality,
                 CompareCustomFormatScore,
-                CompareTrackSearchPriority,
                 CompareProtocol,
                 CompareIndexerPriority,
                 ComparePeersIfTorrent,

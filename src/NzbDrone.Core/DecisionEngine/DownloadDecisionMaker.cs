@@ -104,6 +104,11 @@ namespace NzbDrone.Core.DecisionEngine
 
                         remoteAlbum.Release = report;
 
+                        if (searchCriteria?.TargetRecordingIds?.Any() == true)
+                        {
+                            remoteAlbum.TargetRecordingIds = searchCriteria.TargetRecordingIds;
+                        }
+
                         if (remoteAlbum.Artist == null)
                         {
                             decision = new DownloadDecision(remoteAlbum, new Rejection("Unknown Artist"));

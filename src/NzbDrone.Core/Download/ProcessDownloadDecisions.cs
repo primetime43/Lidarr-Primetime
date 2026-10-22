@@ -191,11 +191,10 @@ namespace NzbDrone.Core.Download
         {
             var albumIds = report.RemoteAlbum.Albums.Select(e => e.Id).ToList();
 
-            return decisions.SelectMany(r => r.RemoteAlbum.Albums)
-                            .Select(e => e.Id)
-                            .ToList()
-                            .Intersect(albumIds)
-                            .Any();
+            return decisions.Any(decision =>
+                decision.RemoteAlbum.TargetRecordingIds.Any() && report.RemoteAlbum.TargetRecordingIds.Any() ?
+                    decision.RemoteAlbum.TargetRecordingIds.Intersect(report.RemoteAlbum.TargetRecordingIds).Any() :
+                    decision.RemoteAlbum.Albums.Any(album => albumIds.Contains(album.Id)));
         }
 
         private void PreparePending(List<Tuple<DownloadDecision, PendingReleaseReason>> queue, List<DownloadDecision> grabbed, List<DownloadDecision> pending, DownloadDecision report, PendingReleaseReason reason)

@@ -244,6 +244,7 @@ namespace NzbDrone.Core.History
                 };
 
                 history.Data.Add("FileId", message.ImportedTrack.Id.ToString());
+                history.Data.Add("RecordingId", track.ForeignRecordingId);
                 history.Data.Add("DroppedPath", message.TrackInfo.Path);
                 history.Data.Add("ImportedPath", message.ImportedTrack.Path);
                 history.Data.Add("DownloadClient", message.DownloadClientInfo?.Name);

@@ -196,6 +196,15 @@ namespace NzbDrone.Core.Download
                      .SelectMany(c => c.ImportDecision.Item.Tracks)
                      .Count() >= trackedDownload.RemoteAlbum.MonitoredTrackCount());
 
+            if (trackedDownload.RemoteAlbum.TargetRecordingIds?.Any() == true)
+            {
+                var importedRecordingIds = importResults.Where(result => result.Result == ImportResultType.Imported)
+                    .SelectMany(result => result.ImportDecision.Item.Tracks)
+                    .Select(track => track.ForeignRecordingId)
+                    .ToHashSet();
+                allTracksImported = trackedDownload.RemoteAlbum.TargetRecordingIds.All(importedRecordingIds.Contains);
+            }
+
             if (allTracksImported)
             {
                 _logger.Debug("All albums were imported for {0}", trackedDownload.DownloadItem.Title);
@@ -258,6 +267,12 @@ namespace NzbDrone.Core.Download
         private void SetImportItem(TrackedDownload trackedDownload)
         {
             trackedDownload.ImportItem = _provideImportItemService.ProvideImportItem(trackedDownload.DownloadItem, trackedDownload.ImportItem);
+
+            // Some clients create a new import item instead of returning the tracked download item.
+            if (trackedDownload.RemoteAlbum?.TargetRecordingIds?.Any() == true)
+            {
+                trackedDownload.ImportItem.TargetRecordingIds = trackedDownload.RemoteAlbum.TargetRecordingIds;
+            }
         }
 
         private bool ValidatePath(TrackedDownload trackedDownload)

@@ -58,5 +58,11 @@ namespace Lidarr.Api.V1.Tracks
 
             return Accepted(MapToResource(tracks, false, false));
         }
+
+        [HttpGet("capabilities")]
+        public IActionResult GetCapabilities()
+        {
+            return Ok(new { trackSearch = true, selectiveImport = true });
+        }
     }
 }

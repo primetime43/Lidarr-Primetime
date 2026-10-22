@@ -3,6 +3,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.History;
+using NzbDrone.Core.Music;
 
 namespace NzbDrone.Core.Download.TrackedDownloads
 {
@@ -14,9 +15,11 @@ namespace NzbDrone.Core.Download.TrackedDownloads
     public class TrackedDownloadAlreadyImported : ITrackedDownloadAlreadyImported
     {
         private readonly Logger _logger;
+        private readonly ITrackService _trackService;
 
-        public TrackedDownloadAlreadyImported(Logger logger)
+        public TrackedDownloadAlreadyImported(ITrackService trackService, Logger logger)
         {
+            _trackService = trackService;
             _logger = logger;
         }
 
@@ -30,7 +33,29 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                 return false;
             }
 
-            if (trackedDownload.RemoteAlbum == null || trackedDownload.RemoteAlbum.Albums == null)
+            if (trackedDownload.RemoteAlbum == null)
+            {
+                return true;
+            }
+
+            if (trackedDownload.RemoteAlbum.TargetRecordingIds?.Any() == true)
+            {
+                var importedHistory = historyItems.Where(item => item.EventType == EntityHistoryEventType.TrackFileImported).ToList();
+                var importedRecordingIds = importedHistory.Select(item => item.Data.GetValueOrDefault("RecordingId"))
+                    .Where(id => id.IsNotNullOrWhiteSpace())
+                    .ToHashSet();
+                var legacyTrackIds = importedHistory.Where(item => item.Data.GetValueOrDefault("RecordingId").IsNullOrWhiteSpace())
+                    .Select(item => item.TrackId).Distinct().ToList();
+
+                if (legacyTrackIds.Any())
+                {
+                    importedRecordingIds.UnionWith(_trackService.GetTracks(legacyTrackIds).Select(track => track.ForeignRecordingId));
+                }
+
+                return trackedDownload.RemoteAlbum.TargetRecordingIds.All(importedRecordingIds.Contains);
+            }
+
+            if (trackedDownload.RemoteAlbum.Albums == null)
             {
                 return true;
             }
