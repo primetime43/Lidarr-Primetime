@@ -13,15 +13,14 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="NLog" Version="5.5.1" />
     <PackageReference Include="NLog.Layouts.ClefJsonLayout" Version="1.0.5" />
-    <PackageReference Include="Sentry" Version="4.0.2" />
+    <PackageReference Include="Sentry" Version="5.16.3" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
-    <PackageReference Include="SourceGear.sqlite3" Version="3.50.4.5" />
-    <PackageReference Include="System.Data.SQLite" Version="2.0.3" />
+    <PackageReference Include="SourceGear.sqlite3" Version="3.53.4" />
+    <PackageReference Include="System.Data.SQLite" Version="2.0.4" />
     <PackageReference Include="System.IO.Abstractions" Version="17.0.24" />
     <PackageReference Include="System.Text.Json" Version="8.0.6" />
     <PackageReference Include="System.ValueTuple" Version="4.6.2" />
     <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.1" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
   </ItemGroup>
   <ItemGroup>

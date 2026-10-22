@@ -137,7 +137,8 @@ namespace NzbDrone.Core.Test.Download.DownloadApprovedReportsTests
             var result = await Subject.ProcessDecisions(new List<DownloadDecision>
             {
                 new DownloadDecision(first), new DownloadDecision(second)
-            }, true);
+            },
+                true);
 
             result.Grabbed.Should().HaveCount(2);
             second.TargetRecordingIds.Should().Equal("second");

@@ -208,7 +208,8 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             Mocker.GetMock<IProcessDownloadDecisions>()
                   .Verify(service => service.ProcessDecisions(
                       It.Is<List<DownloadDecision>>(items => items.Count == albums.Count),
-                      true), Times.Once());
+                      true),
+                      Times.Once());
         }
 
         [Test]
@@ -402,8 +403,10 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
             var result = await Subject.TrackSearch(new List<int> { selectedTrack.Id }, true, false);
 
             Mocker.GetMock<IAlbumService>()
-                  .Verify(service => service.AddAlbum(It.Is<Album>(album =>
-                      album.AddOptions.AddType == AlbumAddType.SongSearch && !album.Monitored), false), Times.Once());
+                  .Verify(service => service.AddAlbum(
+                      It.Is<Album>(album => album.AddOptions.AddType == AlbumAddType.SongSearch && !album.Monitored),
+                      false),
+                      Times.Once());
             Mocker.GetMock<IRefreshAlbumService>()
                   .Verify(service => service.RefreshAlbumInfo(metadataAlbum, null, false), Times.Once());
             Mocker.GetMock<ITrackService>()

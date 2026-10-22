@@ -129,8 +129,7 @@ namespace NzbDrone.Core.Test.MediaFiles
             var results = new List<ImportResult>
             {
                 new ImportResult(new ImportDecision<LocalTrack>(wanted)),
-                new ImportResult(new ImportDecision<LocalTrack>(unwanted,
-                    new Rejection("Track was not targeted by this download")), "Track was not targeted by this download")
+                new ImportResult(new ImportDecision<LocalTrack>(unwanted, new Rejection("Track was not targeted by this download")), "Track was not targeted by this download")
             };
             var item = _trackedDownload.DownloadItem;
             item.CanMoveFiles = canMove;

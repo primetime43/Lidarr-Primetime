@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [develop]
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
@@ -34,3 +33,9 @@ jobs:
           -p:SolutionDir="${{ github.workspace }}/src/"
           -p:RuntimeIdentifiers=linux-x64
           --filter 'FullyQualifiedName~IndexerSearchTests|FullyQualifiedName~NewznabRequestGeneratorFixture|FullyQualifiedName~ParsingServiceTests|FullyQualifiedName~AcceptableSizeSpecificationFixture|FullyQualifiedName~PrioritizeDownloadDecisionFixture|FullyQualifiedName~QueueSpecificationFixture|FullyQualifiedName~CompletedDownloadServiceTests|FullyQualifiedName~TrackedDownloadAlreadyImportedFixture|FullyQualifiedName~DownloadApprovedFixture|FullyQualifiedName~DownloadedTracksImportServiceFixture|FullyQualifiedName~ImportApprovedTracksFixture|FullyQualifiedName~MonitoredTrackSpecificationFixture|FullyQualifiedName~HistoryTests'
+      - name: Build the application and API
+        run: >-
+          dotnet build src/NzbDrone.Console/Lidarr.Console.csproj
+          --configuration Debug
+          -p:SolutionDir="${{ github.workspace }}/src/"
+          -p:RuntimeIdentifiers=linux-x64

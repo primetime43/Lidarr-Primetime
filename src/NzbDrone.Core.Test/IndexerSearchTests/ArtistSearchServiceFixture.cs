@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.DecisionEngine;
@@ -28,11 +27,11 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISearchForReleases>()
                 .Setup(s => s.ArtistSearch(_artist.Id, false, true, false))
-                .Returns(Task.FromResult(new List<DownloadDecision>()));
+                .ReturnsAsync(new List<DownloadDecision>());
 
             Mocker.GetMock<IProcessDownloadDecisions>()
                 .Setup(s => s.ProcessDecisions(It.IsAny<List<DownloadDecision>>()))
-                .Returns(Task.FromResult(new ProcessedDecisions(new List<DownloadDecision>(), new List<DownloadDecision>(), new List<DownloadDecision>())));
+                .ReturnsAsync(new ProcessedDecisions(new List<DownloadDecision>(), new List<DownloadDecision>(), new List<DownloadDecision>()));
         }
 
         [Test]
@@ -72,11 +71,11 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISearchForTracks>()
                 .Setup(s => s.TrackSearch(It.Is<List<int>>(ids => ids.SequenceEqual(new[] { 101, 103 })), true, false))
-                .Returns(Task.FromResult(decisions));
+                .ReturnsAsync(decisions);
 
             Mocker.GetMock<IProcessDownloadDecisions>()
                 .Setup(s => s.ProcessDecisions(decisions, true))
-                .Returns(Task.FromResult(processed));
+                .ReturnsAsync(processed);
 
             Subject.Execute(new ArtistSearchCommand { ArtistId = _artist.Id, Trigger = CommandTrigger.Manual });
 
