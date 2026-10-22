@@ -33,7 +33,7 @@ Aurral itself has not been modified in this repository. Its song-request integra
 
 ## Keep the fork current
 
-The remotes for this checkout are `origin` (`primetime43/Lidarr`) and `upstream` (`Lidarr/Lidarr`). Keep custom features on the fork's `develop` branch and merge upstream `develop` into it; preserve the shared history for future merges.
+The remotes for this checkout are `origin` (`primetime43/Lidarr-Primetime`) and `upstream` (`Lidarr/Lidarr`). Keep custom features on the fork's `develop` branch and merge upstream `develop` into it; preserve the shared history for future merges.
 
 The **Sync upstream Lidarr** GitHub Actions workflow runs daily and supports manual runs. It merges upstream into the reserved `automation/sync-upstream` branch, checks for duplicate migration versions, runs the Song Mode regression tests, and opens or refreshes a pull request into `develop`. Review and merge that pull request to update the fork. Conflicts or failed tests stop the workflow and leave `develop` unchanged. The automation branch is regenerated, so do not put manual feature work on it.
 
