@@ -1,0 +1,228 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { test } = require('node:test');
+const { transformSync } = require('@babel/core');
+const React = require('react');
+
+const root = path.resolve(__dirname, '../src');
+const cache = new Map();
+const translations = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../src/NzbDrone.Core/Localization/Core/en.json'), 'utf8'));
+
+// Load the real selection logic/components without a browser or the Redux app.
+function load(file) {
+  file = path.resolve(file);
+  if (cache.has(file)) return cache.get(file).exports;
+  const module = { exports: {} };
+  cache.set(file, module);
+  const compiled = transformSync(fs.readFileSync(file, 'utf8'), {
+    configFile: false,
+    babelrc: false,
+    presets: [['@babel/preset-env', { targets: { node: 'current' } }], '@babel/preset-react']
+  }).code;
+  function localRequire(name) {
+    if (['react', 'prop-types', 'classnames', 'lodash'].includes(name)) return require(name);
+    if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => key });
+    if (name === 'Helpers/Props') return { kinds: { INFO: 'info', SUCCESS: 'success', PRIMARY: 'primary', DANGER: 'danger' }, sizes: { LARGE: 'large' }, icons: {} };
+    if (name === 'Utilities/String/translate') return (key, args = []) => (translations[key] || key).replace(/\{(\d+)\}/g, (_, index) => args[index]);
+    if (name.startsWith('Utilities/Table/')) return load(path.join(root, `${name}.js`));
+    if (file.includes(`${path.sep}Utilities${path.sep}Table${path.sep}`) && name.startsWith('./')) return load(path.join(path.dirname(file), `${name}.js`));
+    if (name === './songSelection') return load(path.join(path.dirname(file), 'songSelection.js'));
+    if (name === './trackRowSelection') return load(path.join(path.dirname(file), 'trackRowSelection.js'));
+    return function Stub() { return null; };
+  }
+  new Function('require', 'module', 'exports', compiled)(localRequire, module, module.exports);
+  return module.exports;
+}
+
+const { createSongSelection, filterSongs, saveSongSelection } = load(path.join(root, 'Artist/Details/songSelection.js'));
+const ArtistSongs = load(path.join(root, 'Artist/Details/ArtistDetailsTracks.js')).default;
+const QueueRow = load(path.join(root, 'Activity/Queue/QueueRow.js')).default;
+const TrackRow = load(path.join(root, 'Album/Details/TrackRow.js')).default;
+const SongPopularityCell = load(path.join(root, 'Album/Details/SongPopularityCell.js')).default;
+const songs = [
+  { id: 1, groupKey: 'one', title: 'Song One', albumTitle: 'Album A', monitored: true, monitorTrackIds: [1, 11] },
+  { id: 2, groupKey: 'two', title: 'Song Two', albumTitle: 'Album B', monitored: false, monitorTrackIds: [2, 22] }
+];
+
+function panel(save = async () => {}) {
+  const component = new ArtistSongs({ items: songs, onSongsSelectionSave: save });
+  component.setState = (update) => Object.assign(component.state, typeof update === 'function' ? update(component.state) : update);
+  return component;
+}
+
+function textOf(element) {
+  if (element == null || typeof element === 'boolean') return '';
+  if (typeof element !== 'object') return String(element);
+  if (Array.isArray(element)) return element.map(textOf).join('');
+  return textOf(element.props.children);
+}
+
+test('checklist starts with saved monitoring, and title/album filtering is case insensitive', () => {
+  assert.deepEqual(createSongSelection(songs), { one: true, two: false });
+  assert.deepEqual(filterSongs(songs, ' ALBUM b '), [songs[1]]);
+  assert.deepEqual(filterSongs(songs, 'song ONE'), [songs[0]]);
+});
+
+test('filtering/unmounting a row preserves hidden selected songs and mount is not an edit', () => {
+  const component = panel();
+  component.onSelectedChange({ id: 'one', value: true });
+  assert.equal(component.state.isDirty, false);
+  component.onQueryChange({ value: 'Album B' });
+  component.onSelectedChange({ id: 'one', value: null });
+  assert.equal(component.state.selectedState.one, true);
+  component.onSelectAllChange({ value: true });
+  assert.deepEqual(component.state.selectedState, { one: true, two: true });
+});
+
+test('clear selection clears all songs, including filtered-out rows, without saving', () => {
+  const component = panel(() => assert.fail('should not save on clear'));
+  component.onQueryChange({ value: 'Album B' });
+  component.onClearPress();
+  assert.deepEqual(component.state.selectedState, { one: false, two: false });
+  assert.equal(component.state.isDirty, true);
+});
+
+test('save applies only selected songs and searches one representative per recording', async () => {
+  const calls = [];
+  await saveSongSelection({
+    items: songs, selectedState: { two: true },
+    monitor: async (ids, value) => calls.push(['monitor', ids, value]),
+    enableArtist: async () => calls.push(['enable']),
+    search: async (ids) => calls.push(['search', ids])
+  });
+  assert.deepEqual(calls, [['monitor', [1, 11], false], ['monitor', [2, 22], true], ['enable'], ['search', [2]]]);
+});
+
+test('saving an empty selection stops monitoring without a search or enabling the artist', async () => {
+  const calls = [];
+  await saveSongSelection({
+    items: songs, selectedState: {},
+    monitor: async (ids, value) => calls.push([ids, value]),
+    enableArtist: () => assert.fail('should not enable artist'),
+    search: () => assert.fail('should not search')
+  });
+  assert.deepEqual(calls, [[[1, 11], false]]);
+});
+
+test('monitor save failure never starts a download', async () => {
+  await assert.rejects(saveSongSelection({
+    items: songs, selectedState: { two: true },
+    monitor: async () => { throw new Error('failed'); },
+    enableArtist: () => assert.fail('should not enable'),
+    search: () => assert.fail('should not search')
+  }));
+});
+
+test('failed save keeps draft and displays an error for retry', async () => {
+  const component = panel(async () => { throw new Error('failed'); });
+  component.onSelectedChange({ id: 'two', value: true });
+  await component.onDownloadSelectedPress();
+  assert.equal(component.state.saveError, true);
+  assert.equal(component.state.isSaving, false);
+  assert.equal(component.state.selectedState.two, true);
+});
+
+test('checklist is immediately visible with a direct download action', () => {
+  const rendered = panel().render();
+  assert.match(textOf(rendered), /Download selected/);
+  assert.doesNotMatch(textOf(rendered), /Select Songs/);
+});
+
+test('queue shows wanted titles under the album only for selected-song grabs', () => {
+  const props = {
+    columns: [{ name: 'albums.title', isVisible: true }],
+    album: { title: 'Album A' }, customFormats: [], size: 100, sizeleft: 50,
+    targetTracks: [{ foreignRecordingId: 'one', title: 'Song One' }, { foreignRecordingId: 'two', title: 'Song Two' }]
+  };
+  assert.match(textOf(new QueueRow(props).render()), /Wanted songs: Song One, Song Two/);
+  assert.doesNotMatch(textOf(new QueueRow({ ...props, targetTracks: [] }).render()), /Wanted songs/);
+});
+
+test('popularity sorting uses provider positions and leaves unknown songs last', () => {
+  const items = [
+    { ...songs[0], popularity: { position: 20 } },
+    { ...songs[1], popularity: { position: 1 } },
+    { id: 3, title: 'AAA', albumTitle: 'Album C' }
+  ];
+  assert.deepEqual(filterSongs(items, '').map((song) => song.id), [2, 1, 3]);
+  assert.deepEqual(filterSongs(items, '', 'title').map((song) => song.id), [3, 1, 2]);
+  assert.deepEqual(filterSongs(items, '', 'album').map((song) => song.id), [1, 2, 3]);
+  assert.deepEqual(items.map((song) => song.id), [1, 2, 3]);
+});
+
+function rowEvent(overrides = {}) {
+  const target = { closest: () => null };
+  return { target, currentTarget: { contains: () => true }, button: 0, detail: 1, ...overrides };
+}
+
+function selectableRow(props = {}) {
+  const calls = [];
+  const row = new TrackRow({ id: 1, selectionId: 'recording', isSelectMode: true, isRowSelectable: true, isSelected: false, onSelectedChange: (value) => calls.push(value), ...props });
+  return { row, calls };
+}
+
+test('clicking a row selects or unselects its recording and forwards shift for range selection', () => {
+  const { row, calls } = selectableRow();
+  row.onRowClick(rowEvent());
+  assert.deepEqual(calls, [{ id: 'recording', value: true, shiftKey: false }]);
+  row.props = { ...row.props, isSelected: true };
+  row.onRowClick(rowEvent({ shiftKey: true }));
+  assert.deepEqual(calls[1], { id: 'recording', value: false, shiftKey: true });
+});
+
+test('interactive controls, portal dialogs and text selection do not also toggle the row', () => {
+  const { row, calls } = selectableRow();
+  for (const tag of ['input', 'button', 'a', 'label']) {
+    row.onRowClick(rowEvent({ target: { closest: (selector) => selector.includes(tag) ? {} : null } }));
+  }
+  row.onRowClick(rowEvent({ currentTarget: { contains: () => false } }));
+  global.window = { getSelection: () => ({ toString: () => 'selected text' }) };
+  try { row.onRowClick(rowEvent()); } finally { delete global.window; }
+  assert.equal(calls.length, 0);
+});
+
+test('disabled selection and modified, double, secondary or cancelled clicks are ignored', () => {
+  const { row, calls } = selectableRow();
+  for (const overrides of [{ button: 2 }, { detail: 2 }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { defaultPrevented: true }]) {
+    row.onRowClick(rowEvent(overrides));
+  }
+  row.props = { ...row.props, isSelectionDisabled: true };
+  row.onRowClick(rowEvent());
+  assert.equal(calls.length, 0);
+});
+
+test('Space and Enter select a focused row without intercepting control keyboard events', () => {
+  const { row, calls } = selectableRow();
+  const target = {};
+  let prevented = 0;
+  for (const key of [' ', 'Enter']) {
+    row.onRowKeyDown({ key, target, currentTarget: target, preventDefault: () => prevented++ });
+  }
+  row.onRowKeyDown({ key: 'Enter', target: {}, currentTarget: target });
+  row.props = { ...row.props, isSelectionDisabled: true };
+  row.onRowKeyDown({ key: 'Enter', target, currentTarget: target });
+  assert.equal(calls.length, 2);
+  assert.equal(prevented, 2);
+});
+
+test('shift selection follows the displayed popularity order and preserves filtered-out choices', () => {
+  const component = panel();
+  component.props = { ...component.props, items: [
+    { ...songs[0], popularity: { position: 3 } },
+    { ...songs[1], popularity: { position: 1 } },
+    { id: 3, groupKey: 'three', title: 'Song Three', albumTitle: 'Album A', popularity: { position: 2 } }
+  ] };
+  component.onSelectedChange({ id: 'two', value: true });
+  component.onSelectedChange({ id: 'one', value: false, shiftKey: true });
+  assert.deepEqual(component.state.selectedState, { one: false, two: false, three: false });
+});
+
+test('popularity shows a named provider position and source link, without inventing a rating for unknown songs', () => {
+  const known = SongPopularityCell({ popularity: { position: 2, providerScore: 900000, sourceUrl: 'https://www.deezer.com/track/123' } });
+  assert.match(textOf(known), /Top #2Deezer/);
+  assert.equal(known.props.children.props.to, 'https://www.deezer.com/track/123');
+  const unknown = SongPopularityCell({});
+  assert.equal(textOf(unknown), '—');
+  assert.match(unknown.props.title, /not a quality rating/i);
+});

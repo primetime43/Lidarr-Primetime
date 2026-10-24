@@ -4,7 +4,15 @@ Song Mode lets you choose any song or several songs from an album. A song does n
 
 ## Choose songs
 
-Edit an artist, enable **Song Mode**, and save. In the artist's song catalog, use **Select Songs**, then **Edit** and **Save** to monitor the songs you want. Newly monitored songs trigger a search. You can also search a selection explicitly. Keep the artist monitored for automatic missing-song and quality searches.
+Open an artist and click **Song Mode** in the toolbar. Check the songs you want and click **Download selected**. The catalog is open immediately, with a song/album filter. **Clear selection** starts a fresh checklist, and **Save selection** changes monitoring without starting a search (including saving an empty selection to stop monitoring all songs). These actions apply to this artist only. Checked songs hidden by the filter remain selected. Downloading automatically enables artist monitoring so future missing-song and quality searches work.
+
+The checklist initially reflects existing monitoring. Switching modes or changing checkboxes does not alter saved monitoring until you save or download. Saving monitors only the checked songs, but never deletes existing music or cancels already-grabbed downloads. Switch back with **Album Mode** in the toolbar.
+
+Click a song row or its checkbox to select it; Shift-click selects a range in the displayed order. Focus a row and press Space or Enter to toggle it with the keyboard. Buttons and links keep their normal actions.
+
+The **Popularity** column shows each matched song's position in the artist's Deezer top tracks, with a link to the source. **Most popular** sorts those songs first; title and album sorting are also available. These are provider rankings, not community ratings or a measure of song quality. A dash means no confident match, not a bad song. Catalog matching checks title and duration, preserves live/remix versions, and requires multiple recordings to identify same-named artists unless metadata already supplies a Deezer artist link. Public catalog lookups need no API key and are cached for 12 hours; provider failures never block song selection or downloading.
+
+Selective downloads show **Wanted songs** below the album title in **Activity → Queue**. These titles come from the recordings saved with the download, so later checklist changes do not mislabel an in-flight download. Normal whole-album downloads keep their usual display.
 
 Searches query the artist and song title first. Newznab-compatible indexers use their track parameter when supported, or a text query otherwise. Results must match the requested artist and song title; import identification then checks recording IDs. Availability depends on what the configured indexers publish and how their releases are named.
 

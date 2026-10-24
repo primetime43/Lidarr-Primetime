@@ -33,9 +33,31 @@ jobs:
           -p:SolutionDir="${{ github.workspace }}/src/"
           -p:RuntimeIdentifiers=linux-x64
           --filter 'FullyQualifiedName~IndexerSearchTests|FullyQualifiedName~NewznabRequestGeneratorFixture|FullyQualifiedName~ParsingServiceTests|FullyQualifiedName~AcceptableSizeSpecificationFixture|FullyQualifiedName~PrioritizeDownloadDecisionFixture|FullyQualifiedName~QueueSpecificationFixture|FullyQualifiedName~CompletedDownloadServiceTests|FullyQualifiedName~TrackedDownloadAlreadyImportedFixture|FullyQualifiedName~DownloadApprovedFixture|FullyQualifiedName~DownloadedTracksImportServiceFixture|FullyQualifiedName~ImportApprovedTracksFixture|FullyQualifiedName~MonitoredTrackSpecificationFixture|FullyQualifiedName~HistoryTests'
+      - name: Test external song popularity matching
+        run: >-
+          dotnet test src/NzbDrone.Core.Test/Lidarr.Core.Test.csproj
+          --configuration Debug --no-restore
+          -p:SolutionDir="${{ github.workspace }}/src/"
+          -p:RuntimeIdentifiers=linux-x64
+          --filter 'FullyQualifiedName~SongPopularityServiceFixture'
       - name: Build the application and API
         run: >-
           dotnet build src/NzbDrone.Console/Lidarr.Console.csproj
           --configuration Debug
           -p:SolutionDir="${{ github.workspace }}/src/"
           -p:RuntimeIdentifiers=linux-x64
+      - name: Test selected-song queue resources
+        run: >-
+          dotnet test src/NzbDrone.Api.Test/Lidarr.Api.Test.csproj
+          --configuration Debug
+          -p:SolutionDir="${{ github.workspace }}/src/"
+          -p:RuntimeIdentifiers=linux-x64
+          --filter 'FullyQualifiedName~QueueResourceFixture'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - name: Install frontend dependencies
+        run: corepack yarn install --frozen-lockfile
+      - name: Test song checklist and queue UI
+        run: node --test frontend/test/songMode.test.cjs

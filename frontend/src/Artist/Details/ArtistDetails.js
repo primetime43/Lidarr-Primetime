@@ -198,6 +198,7 @@ class ArtistDetails extends Component {
       qualityProfileId,
       monitored,
       songMode,
+      songModeError,
       genres,
       albumTypes,
       status,
@@ -224,6 +225,7 @@ class ArtistDetails extends Component {
       onMonitorTogglePress,
       onRefreshPress,
       onSearchPress,
+      onSongModePress,
       artistType
     } = this.props;
 
@@ -374,6 +376,13 @@ class ArtistDetails extends Component {
           </PageToolbarSection>
 
           <PageToolbarSection alignContent={align.RIGHT}>
+            <PageToolbarButton
+              label={songMode ? translate('AlbumMode') : translate('SongMode')}
+              iconName={icons.TRACK_FILE}
+              isSpinning={isSaving}
+              title={translate('SwitchSongModeHelpText')}
+              onPress={onSongModePress}
+            />
             {
               songMode ?
                 null :
@@ -387,6 +396,10 @@ class ArtistDetails extends Component {
         </PageToolbar>
 
         <PageContentBody innerClassName={styles.innerContentBody}>
+          {
+            songModeError &&
+              <div role="alert">{translate('SongModeSaveError')}</div>
+          }
           <div className={styles.header}>
             <div
               className={styles.backdrop}
@@ -794,6 +807,8 @@ ArtistDetails.propTypes = {
   qualityProfileId: PropTypes.number.isRequired,
   monitored: PropTypes.bool.isRequired,
   songMode: PropTypes.bool.isRequired,
+  songModeError: PropTypes.bool,
+  onSongModePress: PropTypes.func.isRequired,
   artistType: PropTypes.string,
   albumTypes: PropTypes.arrayOf(PropTypes.string),
   genres: PropTypes.arrayOf(PropTypes.string),

@@ -9,6 +9,8 @@ interface CssExports {
   'monitored': string;
   'popularity': string;
   'search': string;
+  'selectableRow': string;
+  'selectedRow': string;
   'size': string;
   'status': string;
   'title': string;

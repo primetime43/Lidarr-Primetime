@@ -2,12 +2,10 @@
 // Please do not change this file!
 interface CssExports {
   'actions': string;
-  'collapseButtonContainer': string;
-  'expandButton': string;
-  'expandButtonIcon': string;
+  'filter': string;
   'header': string;
+  'help': string;
   'left': string;
-  'rankingHelp': string;
   'selectionCount': string;
   'songs': string;
   'title': string;

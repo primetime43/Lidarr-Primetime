@@ -1,3 +1,4 @@
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import AlbumFormats from 'Album/AlbumFormats';
@@ -22,7 +23,9 @@ import formatTimeSpan from 'Utilities/Date/formatTimeSpan';
 import formatBytes from 'Utilities/Number/formatBytes';
 import formatCustomFormatScore from 'Utilities/Number/formatCustomFormatScore';
 import translate from 'Utilities/String/translate';
+import SongPopularityCell from './SongPopularityCell';
 import TrackActionsCell from './TrackActionsCell';
+import { canSelectTrackRow } from './trackRowSelection';
 import styles from './TrackRow.css';
 
 class TrackRow extends Component {
@@ -57,6 +60,32 @@ class TrackRow extends Component {
     this.setState({ isInteractiveSearchModalOpen: false });
   };
 
+  onRowClick = (event) => {
+    if (!this.props.isRowSelectable || !this.props.isSelectMode || this.props.isSelectionDisabled || !canSelectTrackRow(event)) {
+      return;
+    }
+    if (typeof window !== 'undefined' && window.getSelection?.()?.toString()) {
+      return;
+    }
+    this.toggleRow(event.shiftKey);
+  };
+
+  onRowKeyDown = (event) => {
+    if (!this.props.isRowSelectable || !this.props.isSelectMode || this.props.isSelectionDisabled || event.target !== event.currentTarget || ![' ', 'Enter'].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    this.toggleRow(event.shiftKey);
+  };
+
+  toggleRow = (shiftKey) => {
+    this.props.onSelectedChange({
+      id: this.props.selectionId || this.props.id,
+      value: !this.props.isSelected,
+      shiftKey: !!shiftKey
+    });
+  };
+
   //
   // Render
 
@@ -78,9 +107,12 @@ class TrackRow extends Component {
       indexerFlags,
       monitored,
       appearanceCount,
+      popularity,
       isSaving,
       isSearching,
       isSelectMode,
+      isRowSelectable,
+      isSelectionDisabled,
       isSelected,
       selectionId,
       columns,
@@ -89,13 +121,20 @@ class TrackRow extends Component {
     } = this.props;
 
     return (
-      <TableRow>
+      <TableRow
+        className={isSelectMode && isRowSelectable ? classNames(styles.selectableRow, isSelected && styles.selectedRow) : undefined}
+        onClick={isSelectMode && isRowSelectable ? this.onRowClick : undefined}
+        onKeyDown={isSelectMode && isRowSelectable ? this.onRowKeyDown : undefined}
+        tabIndex={isSelectMode && isRowSelectable && !isSelectionDisabled ? 0 : undefined}
+        aria-selected={isSelectMode && isRowSelectable ? isSelected : undefined}
+      >
         {
           isSelectMode ?
             <TableSelectCell
               id={selectionId || id}
               isSelected={isSelected}
               onSelectedChange={onSelectedChange}
+              isDisabled={isSelectionDisabled}
             /> :
             null
         }
@@ -179,6 +218,9 @@ class TrackRow extends Component {
             }
 
             if (name === 'popularity') {
+              if (isRowSelectable) {
+                return <SongPopularityCell key={name} popularity={popularity} />;
+              }
               return (
                 <TableRowCell
                   key={name}
@@ -357,6 +399,7 @@ TrackRow.propTypes = {
   foreignAlbumId: PropTypes.string,
   monitorTrackIds: PropTypes.arrayOf(PropTypes.number),
   appearanceCount: PropTypes.number,
+  popularity: PropTypes.object,
   trackFileId: PropTypes.number,
   mediumNumber: PropTypes.number.isRequired,
   trackNumber: PropTypes.string.isRequired,
@@ -366,6 +409,8 @@ TrackRow.propTypes = {
   isSaving: PropTypes.bool,
   isSearching: PropTypes.bool.isRequired,
   isSelectMode: PropTypes.bool,
+  isRowSelectable: PropTypes.bool,
+  isSelectionDisabled: PropTypes.bool,
   isSelected: PropTypes.bool,
   selectionId: PropTypes.string,
   monitored: PropTypes.bool.isRequired,
@@ -386,6 +431,8 @@ TrackRow.defaultProps = {
   customFormats: [],
   indexerFlags: 0,
   isSelectMode: false,
+  isRowSelectable: false,
+  isSelectionDisabled: false,
   isSelected: false
 };
 

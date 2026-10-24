@@ -4,6 +4,22 @@
   white-space: nowrap;
 }
 
+.selectableRow {
+  composes: row from '~Components/Table/TableRow.css';
+
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primaryColor);
+    outline-offset: -2px;
+  }
+}
+
+.selectedRow {
+  background-color: var(--tableRowHoverBackgroundColor);
+  box-shadow: inset 3px 0 0 var(--primaryColor);
+}
+
 .album {
   composes: cell from '~Components/Table/Cells/TableRowCell.css';
 

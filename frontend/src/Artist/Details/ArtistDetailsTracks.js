@@ -1,345 +1,223 @@
-import _ from 'lodash';
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import TrackRowConnector from 'Album/Details/TrackRowConnector';
-import Icon from 'Components/Icon';
+import Alert from 'Components/Alert';
+import SelectInput from 'Components/Form/SelectInput';
+import TextInput from 'Components/Form/TextInput';
 import Label from 'Components/Label';
 import Button from 'Components/Link/Button';
-import IconButton from 'Components/Link/IconButton';
-import Link from 'Components/Link/Link';
-import MonitorToggleButton from 'Components/MonitorToggleButton';
 import Table from 'Components/Table/Table';
 import TableBody from 'Components/Table/TableBody';
-import { icons, kinds, sizes } from 'Helpers/Props';
+import { kinds, sizes } from 'Helpers/Props';
 import translate from 'Utilities/String/translate';
-import areAllSelected from 'Utilities/Table/areAllSelected';
-import selectAll from 'Utilities/Table/selectAll';
 import toggleSelected from 'Utilities/Table/toggleSelected';
-import EditSelectedSongsModal from './EditSelectedSongsModal';
+import { createSongSelection, filterSongs } from './songSelection';
 import styles from './ArtistDetailsTracks.css';
 
 const columns = [
-  {
-    name: 'monitored',
-    label: () => translate('Monitored'),
-    isVisible: true
-  },
-  {
-    name: 'title',
-    label: () => translate('Title'),
-    isVisible: true
-  },
-  {
-    name: 'album',
-    label: () => translate('Album'),
-    isVisible: true
-  },
-  {
-    name: 'duration',
-    label: () => translate('Duration'),
-    isVisible: true
-  },
-  {
-    name: 'popularity',
-    label: () => translate('Appearances'),
-    isVisible: true
-  },
-  {
-    name: 'status',
-    label: () => translate('Status'),
-    isVisible: true
-  },
-  {
-    name: 'search',
-    label: () => translate('Search'),
-    isVisible: true
-  },
-  {
-    name: 'actions',
-    label: () => translate('Actions'),
-    isVisible: true
-  }
+  { name: 'title', label: () => translate('Title'), isVisible: true },
+  { name: 'album', label: () => translate('Album'), isVisible: true },
+  { name: 'popularity', label: () => translate('Popularity'), isVisible: true },
+  { name: 'duration', label: () => translate('Duration'), isVisible: true },
+  { name: 'status', label: () => translate('Status'), isVisible: true },
+  { name: 'search', label: () => translate('Search'), isVisible: true },
+  { name: 'actions', label: () => translate('Actions'), isVisible: true }
 ];
-
-function getCountKind(artistMonitored, fileCount, totalCount) {
-  if (totalCount > 0 && fileCount === totalCount) {
-    return kinds.SUCCESS;
-  }
-
-  if (!artistMonitored) {
-    return kinds.WARNING;
-  }
-
-  return kinds.DANGER;
-}
-
-function getSelectionState(items) {
-  const selectedState = _.zipObject(
-    items.map((item) => item.groupKey),
-    items.map(() => false)
-  );
-
-  return {
-    ...areAllSelected(selectedState),
-    lastToggled: null,
-    selectedState
-  };
-}
-
-function translateWithFallback(key, fallback, args) {
-  const translated = translate(key, args);
-  return translated === key ? fallback : translated;
-}
 
 class ArtistDetailsTracks extends Component {
 
   constructor(props, context) {
     super(props, context);
-
     this.state = {
-      isExpanded: false,
-      isSelectMode: false,
-      isEditSelectedSongsModalOpen: false,
-      ...getSelectionState(props.items)
+      selectedState: createSongSelection(props.items),
+      lastToggled: null,
+      query: '',
+      sortKey: 'popularity',
+      isDirty: false,
+      isSaving: false,
+      saveError: false,
+      saved: false
     };
   }
 
   componentDidUpdate(prevProps) {
-    if (!this.state.isSelectMode && prevProps.items !== this.props.items) {
-      this.setState(getSelectionState(this.props.items));
+    if (prevProps.items !== this.props.items && !this.state.isDirty && !this.state.isSaving) {
+      this.setState({ selectedState: createSongSelection(this.props.items) });
     }
   }
 
-  onExpandPress = () => {
-    this.setState((state) => ({ isExpanded: !state.isExpanded }));
+  onQueryChange = ({ value }) => {
+    this.setState({ query: value, lastToggled: null });
   };
 
-  onMonitorAllPress = (monitored) => {
-    const trackIds = _.uniq(_.flatMap(this.props.items, 'monitorTrackIds'));
-    this.props.onTracksMonitoredChange(trackIds, monitored);
+  onSortChange = ({ value }) => {
+    this.setState({ sortKey: value, lastToggled: null });
   };
 
-  onSelectSongsPress = () => {
+  onClearPress = () => {
     this.setState({
-      isExpanded: true,
-      isSelectMode: true,
-      ...getSelectionState(this.props.items)
-    });
-  };
-
-  onCancelSelectionPress = () => {
-    this.setState({
-      isSelectMode: false,
-      ...getSelectionState(this.props.items)
+      selectedState: Object.fromEntries(this.props.items.map((item) => [item.groupKey, false])),
+      isDirty: true,
+      saved: false,
+      lastToggled: null
     });
   };
 
   onSelectAllChange = ({ value }) => {
-    this.setState(selectAll(this.state.selectedState, value));
+    if (this.state.isSaving) {
+      return;
+    }
+    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey);
+    this.setState((state) => ({
+      selectedState: { ...state.selectedState, ...Object.fromEntries(visible.map((item) => [item.groupKey, value])) },
+      isDirty: true,
+      saved: false
+    }));
   };
 
   onSelectedChange = ({ id, value, shiftKey = false }) => {
-    const selectableItems = this.props.items.map((item) => ({ id: item.groupKey }));
-
-    this.setState((state) => {
-      return toggleSelected(state, selectableItems, id, value, shiftKey);
-    });
+    // TableSelectCell registers on mount and unregisters on unmount. Filtering
+    // unmounts rows, but must not change the user's draft wanted list.
+    if (this.state.isSaving || value == null || this.state.selectedState[id] === value) {
+      return;
+    }
+    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey).map((item) => ({ id: item.groupKey }));
+    this.setState((state) => ({
+      ...toggleSelected(state, visible, id, value, shiftKey),
+      isDirty: true,
+      saved: false
+    }));
   };
 
-  onEditSelectedSongsPress = () => {
-    this.setState({ isEditSelectedSongsModalOpen: true });
+  onSavePress = async(download) => {
+    if (this.state.isSaving) {
+      return;
+    }
+    this.setState({ isSaving: true, saveError: false, saved: false });
+    try {
+      await this.props.onSongsSelectionSave(this.state.selectedState, download);
+      this.setState({ isSaving: false, isDirty: false, saved: true });
+    } catch {
+      this.setState({ isSaving: false, isDirty: true, saveError: true });
+    }
   };
 
-  onEditSelectedSongsModalClose = () => {
-    this.setState({ isEditSelectedSongsModalOpen: false });
-  };
+  onSaveSelectionPress = () => this.onSavePress(false);
 
-  onEditSelectedSongsSave = (monitored) => {
-    const {
-      items,
-      onSongsSelectionSave
-    } = this.props;
-
-    const {
-      selectedState
-    } = this.state;
-
-    const trackIds = _.uniq(_.flatMap(
-      items.filter((item) => selectedState[item.groupKey]),
-      'monitorTrackIds'
-    ));
-
-    onSongsSelectionSave(trackIds, monitored);
-    this.setState({
-      isEditSelectedSongsModalOpen: false,
-      isSelectMode: false,
-      ...getSelectionState(items)
-    });
-  };
+  onDownloadSelectedPress = () => this.onSavePress(true);
 
   render() {
-    const {
-      artistName,
-      artistMonitored,
-      items
-    } = this.props;
-
-    const {
-      allSelected,
-      allUnselected,
-      isEditSelectedSongsModalOpen,
-      isExpanded,
-      isSelectMode,
-      selectedState
-    } = this.state;
-
-    const monitoredCount = items.filter((track) => track.monitored).length;
-    const fileCount = items.filter((track) => track.hasFile).length;
-    const allTracksMonitored = items.length > 0 && monitoredCount === items.length;
-    const isSaving = items.some((track) => track.isSaving);
-    const popularFirstLabel = translate('PopularFirst');
-    const selectedCount = Object.values(selectedState).filter(Boolean).length;
-    const tableColumns = isSelectMode ?
-      columns.filter((column) => column.name !== 'monitored') :
-      columns;
+    const { items, popularityStatus } = this.props;
+    const { selectedState, query, sortKey, isSaving, isDirty, saveError, saved } = this.state;
+    const visible = filterSongs(items, query, sortKey);
+    const selectedCount = items.filter((item) => selectedState[item.groupKey]).length;
+    const fileCount = items.filter((item) => item.hasFile).length;
+    const allSelected = visible.length > 0 && visible.every((item) => selectedState[item.groupKey]);
+    const allUnselected = visible.every((item) => !selectedState[item.groupKey]);
 
     return (
       <div className={styles.songs}>
         <div className={styles.header}>
           <div className={styles.left}>
-            {
-              isSelectMode ?
-                null :
-                <MonitorToggleButton
-                  monitored={allTracksMonitored}
-                  isSaving={isSaving}
-                  size={24}
-                  onPress={this.onMonitorAllPress}
-                />
-            }
-
-            <span className={styles.title}>
-              {translate('Songs')}
-            </span>
-
-            <Label
-              title={translate('TotalSongCountSongsTotalSongFileCountSongsWithFilesInterp', [items.length, fileCount])}
-              kind={getCountKind(artistMonitored, fileCount, items.length)}
-              size={sizes.LARGE}
-            >
-              <span>{fileCount} / {items.length}</span>
+            <span className={styles.title}>{translate('Songs')}</span>
+            <Label kind={kinds.INFO} size={sizes.LARGE}>
+              {fileCount} / {items.length}
             </Label>
-
-            <span
-              className={styles.rankingHelp}
-              title={translate('ArtistSongsPopularityHelpText')}
-            >
-              {popularFirstLabel === 'PopularFirst' ? 'Popular first' : popularFirstLabel}
-            </span>
           </div>
-
-          <Link
-            className={styles.expandButton}
-            onPress={this.onExpandPress}
-          >
-            <Icon
-              className={styles.expandButtonIcon}
-              name={isExpanded ? icons.COLLAPSE : icons.EXPAND}
-              title={isExpanded ? translate('IsExpandedHideTracks') : translate('IsExpandedShowTracks')}
-              size={24}
-            />
-          </Link>
-
           <div className={styles.actions}>
-            {
-              isSelectMode ?
-                <>
-                  <span className={styles.selectionCount}>
-                    {translateWithFallback('SelectedSongsCountInterp', `${selectedCount} selected`, [selectedCount])}
-                  </span>
-
-                  <Button
-                    size={sizes.SMALL}
-                    onPress={this.onCancelSelectionPress}
-                  >
-                    {translate('Cancel')}
-                  </Button>
-
-                  <Button
-                    size={sizes.SMALL}
-                    isDisabled={!selectedCount || isSaving}
-                    onPress={this.onEditSelectedSongsPress}
-                  >
-                    {translate('Edit')}
-                  </Button>
-                </> :
-                <Button
-                  size={sizes.SMALL}
-                  onPress={this.onSelectSongsPress}
-                >
-                  {translateWithFallback('SelectSongs', 'Select songs')}
-                </Button>
-            }
+            <span className={styles.selectionCount}>
+              {translate('SelectedSongsCountInterp', [selectedCount])}
+            </span>
+            <Button isDisabled={isSaving || !selectedCount} onPress={this.onClearPress}>
+              {translate('ClearSelection')}
+            </Button>
+            <Button isDisabled={isSaving || !isDirty} onPress={this.onSaveSelectionPress}>
+              {translate('SaveSelection')}
+            </Button>
+            <Button kind={kinds.PRIMARY} isDisabled={isSaving || !selectedCount}
+              onPress={this.onDownloadSelectedPress}
+            >
+              {isSaving ? translate('Saving') : translate('DownloadSelectedSongs')}
+            </Button>
           </div>
         </div>
-
+        <div className={styles.help}>
+          {translate('SongSelectionHelpText')}
+        </div>
+        <div className={styles.filter}>
+          <label>
+            {translate('FindSongs')}
+            <TextInput
+              name="songFilter"
+              value={query}
+              placeholder={translate('FilterSongsPlaceholder')}
+              onChange={this.onQueryChange}
+            />
+          </label>
+          <label>
+            {translate('SortSongs')}
+            <SelectInput
+              name="songSort"
+              value={sortKey}
+              values={[
+                { key: 'popularity', value: translate('MostPopular') },
+                { key: 'title', value: translate('Title') },
+                { key: 'album', value: translate('Album') }
+              ]}
+              onChange={this.onSortChange}
+            />
+          </label>
+        </div>
+        <div className={styles.help}>
+          {translate({ loading: 'SongPopularityLoading', available: 'SongPopularitySourceHelp' }[popularityStatus] || 'SongPopularityUnavailable')}
+        </div>
         {
-          isExpanded &&
-            <div className={styles.tracks}>
-              <Table
-                selectAll={isSelectMode}
-                allSelected={allSelected}
-                allUnselected={allUnselected}
-                columns={tableColumns}
-                onSelectAllChange={this.onSelectAllChange}
-              >
-                <TableBody>
-                  {
-                    items.map((item) => {
-                      return (
-                        <TrackRowConnector
-                          key={item.groupKey}
-                          columns={tableColumns}
-                          isSelectMode={isSelectMode}
-                          isSelected={!!selectedState[item.groupKey]}
-                          selectionId={item.groupKey}
-                          {...item}
-                          onSelectedChange={this.onSelectedChange}
-                        />
-                      );
-                    })
-                  }
-                </TableBody>
-              </Table>
-
-              <div className={styles.collapseButtonContainer}>
-                <IconButton
-                  name={icons.COLLAPSE}
-                  size={20}
-                  title={translate('HideTracks')}
-                  onPress={this.onExpandPress}
-                />
-              </div>
-            </div>
+          saveError &&
+            <Alert kind={kinds.DANGER} role="alert">{translate('SongSelectionSaveError')}</Alert>
         }
-
-        <EditSelectedSongsModal
-          isOpen={isEditSelectedSongsModalOpen}
-          artistName={artistName}
-          selectedCount={selectedCount}
-          onSavePress={this.onEditSelectedSongsSave}
-          onModalClose={this.onEditSelectedSongsModalClose}
-        />
+        {
+          saved &&
+            <Alert kind={kinds.SUCCESS} role="status">{translate('SongSelectionSaved')}</Alert>
+        }
+        <div className={styles.tracks}>
+          <Table
+            selectAll={true}
+            allSelected={allSelected}
+            allUnselected={allUnselected}
+            columns={columns}
+            onSelectAllChange={this.onSelectAllChange}
+          >
+            <TableBody>
+              {
+                visible.map((item) => (
+                  <TrackRowConnector
+                    key={item.groupKey}
+                    {...item}
+                    columns={columns}
+                    isSelectMode={true}
+                    isRowSelectable={true}
+                    isSelectionDisabled={isSaving}
+                    isSelected={!!selectedState[item.groupKey]}
+                    selectionId={item.groupKey}
+                    onSelectedChange={this.onSelectedChange}
+                  />
+                ))
+              }
+            </TableBody>
+          </Table>
+          {
+            !visible.length &&
+              <div className={styles.help}>{translate('NoSongsMatchFilter')}</div>
+          }
+        </div>
       </div>
     );
   }
 }
 
 ArtistDetailsTracks.propTypes = {
-  artistName: PropTypes.string.isRequired,
-  artistMonitored: PropTypes.bool.isRequired,
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
-  onTracksMonitoredChange: PropTypes.func.isRequired,
+  popularityStatus: PropTypes.string,
   onSongsSelectionSave: PropTypes.func.isRequired
 };
 

@@ -6,7 +6,7 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { clearAlbums, fetchAlbums } from 'Store/Actions/albumActions';
-import { toggleArtistMonitored } from 'Store/Actions/artistActions';
+import { setArtistSongMode, toggleArtistMonitored } from 'Store/Actions/artistActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
 import { clearTracks, fetchTracks } from 'Store/Actions/trackActions';
@@ -190,12 +190,15 @@ const mapDispatchToProps = {
   fetchTrackFiles,
   clearTrackFiles,
   toggleArtistMonitored,
+  setArtistSongMode,
   fetchQueueDetails,
   clearQueueDetails,
   executeCommand
 };
 
 class ArtistDetailsConnector extends Component {
+
+  state = { songModeError: false };
 
   //
   // Lifecycle
@@ -266,6 +269,15 @@ class ArtistDetailsConnector extends Component {
     });
   };
 
+  onSongModePress = async() => {
+    this.setState({ songModeError: false });
+    try {
+      await this.props.setArtistSongMode({ artistId: this.props.id, songMode: !this.props.songMode });
+    } catch {
+      this.setState({ songModeError: true });
+    }
+  };
+
   onRefreshPress = () => {
     this.props.executeCommand({
       name: commandNames.REFRESH_ARTIST,
@@ -287,6 +299,8 @@ class ArtistDetailsConnector extends Component {
     return (
       <ArtistDetails
         {...this.props}
+        songModeError={this.state.songModeError}
+        onSongModePress={this.onSongModePress}
         onMonitorTogglePress={this.onMonitorTogglePress}
         onRefreshPress={this.onRefreshPress}
         onSearchPress={this.onSearchPress}
@@ -310,6 +324,8 @@ ArtistDetailsConnector.propTypes = {
   fetchTrackFiles: PropTypes.func.isRequired,
   clearTrackFiles: PropTypes.func.isRequired,
   toggleArtistMonitored: PropTypes.func.isRequired,
+  setArtistSongMode: PropTypes.func.isRequired,
+  songMode: PropTypes.bool.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
   clearQueueDetails: PropTypes.func.isRequired,
   executeCommand: PropTypes.func.isRequired

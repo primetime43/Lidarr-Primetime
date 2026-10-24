@@ -4,9 +4,12 @@ import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
+import { toggleArtistMonitored } from 'Store/Actions/artistActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import { toggleTracksMonitored } from 'Store/Actions/trackActions';
+import createAjaxRequest from 'Utilities/createAjaxRequest';
 import ArtistDetailsTracks from './ArtistDetailsTracks';
+import { saveSongSelection } from './songSelection';
 
 const albumTypePriority = {
   Album: 0,
@@ -54,11 +57,6 @@ export function createArtistSongs(tracks, albums) {
   const songs = Object.entries(groupedTracks).map(([groupKey, appearances]) => {
     const representative = getRepresentative(appearances, albumsById);
     const album = albumsById[representative.albumId];
-    const bestRatedAppearance = _.orderBy(
-      appearances,
-      [(track) => track.ratings?.votes || 0, (track) => track.ratings?.value || 0],
-      ['desc', 'desc']
-    )[0];
 
     return {
       ...representative,
@@ -69,21 +67,11 @@ export function createArtistSongs(tracks, albums) {
       monitored: appearances.some((track) => track.monitored),
       isSaving: appearances.some((track) => track.isSaving),
       hasFile: appearances.some((track) => track.hasFile),
-      appearanceCount: _.uniq(appearances.map((track) => track.albumId)).length,
-      ratings: bestRatedAppearance.ratings || { votes: 0, value: 0 }
+      appearanceCount: _.uniq(appearances.map((track) => track.albumId)).length
     };
   });
 
-  return _.orderBy(
-    songs,
-    [
-      (song) => song.ratings.votes,
-      (song) => song.ratings.value,
-      (song) => song.appearanceCount,
-      (song) => song.title.toLocaleLowerCase()
-    ],
-    ['desc', 'desc', 'desc', 'asc']
-  );
+  return _.sortBy(songs, (song) => song.title.toLocaleLowerCase());
 }
 
 function createMapStateToProps() {
@@ -103,38 +91,62 @@ function createMapStateToProps() {
 
 const mapDispatchToProps = {
   executeCommand,
+  toggleArtistMonitored,
   toggleTracksMonitored
 };
 
 class ArtistDetailsTracksConnector extends Component {
 
-  onTracksMonitoredChange = (trackIds, monitored) => {
-    this.props.toggleTracksMonitored({ trackIds, monitored });
+  state = { popularityStatus: 'loading', popularityByRecordingId: {} };
+
+  componentDidMount() {
+    this.fetchPopularity();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.artistId !== this.props.artistId) {
+      this.fetchPopularity();
+    }
+  }
+
+  componentWillUnmount() {
+    this.abortPopularity?.();
+  }
+
+  fetchPopularity = () => {
+    this.abortPopularity?.();
+    const artistId = this.props.artistId;
+    this.setState({ popularityStatus: 'loading', popularityByRecordingId: {} });
+    const { request, abortRequest } = createAjaxRequest({ url: '/track/popularity', data: { artistId }, dataType: 'json' });
+    this.abortPopularity = abortRequest;
+    request.done((result) => {
+      if (this.props.artistId === artistId) {
+        this.setState({ popularityStatus: result.status, popularityByRecordingId: _.keyBy(result.tracks, 'foreignRecordingId') });
+      }
+    });
+    request.fail((error) => {
+      if (!error.aborted && this.props.artistId === artistId) {
+        this.setState({ popularityStatus: 'unavailable' });
+      }
+    });
   };
 
-  onSongsSelectionSave = (trackIds, monitored) => {
-    if (trackIds.length) {
-      const promise = this.props.toggleTracksMonitored({
-        trackIds,
-        monitored
-      });
-
-      if (monitored) {
-        promise.done(() => {
-          this.props.executeCommand({
-            name: commandNames.TRACK_SEARCH,
-            trackIds
-          });
-        });
-      }
-    }
+  onSongsSelectionSave = (selectedState, download) => {
+    return saveSongSelection({
+      items: this.props.items,
+      selectedState,
+      monitor: (trackIds, monitored) => this.props.toggleTracksMonitored({ trackIds, monitored }),
+      enableArtist: () => (this.props.artistMonitored ? undefined : this.props.toggleArtistMonitored({ artistId: this.props.artistId, monitored: true })),
+      search: download ? (trackIds) => this.props.executeCommand({ name: commandNames.TRACK_SEARCH, trackIds }) : null
+    });
   };
 
   render() {
     return (
       <ArtistDetailsTracks
         {...this.props}
-        onTracksMonitoredChange={this.onTracksMonitoredChange}
+        items={this.props.items.map((item) => ({ ...item, popularity: this.state.popularityByRecordingId[item.groupKey] }))}
+        popularityStatus={this.state.popularityStatus}
         onSongsSelectionSave={this.onSongsSelectionSave}
       />
     );
@@ -146,6 +158,8 @@ ArtistDetailsTracksConnector.propTypes = {
   artistName: PropTypes.string.isRequired,
   artistMonitored: PropTypes.bool.isRequired,
   executeCommand: PropTypes.func.isRequired,
+  toggleArtistMonitored: PropTypes.func.isRequired,
+  items: PropTypes.arrayOf(PropTypes.object).isRequired,
   toggleTracksMonitored: PropTypes.func.isRequired
 };
 
