@@ -32,15 +32,15 @@ After all requested songs in a movable download are imported, files positively i
 
 Existing Lidarr v1 artist, album, command, and queue endpoints remain available. Point Aurral's Lidarr URL and API key at this fork as usual, with consistent library and download mounts.
 
-[Aurral currently downloads individual tracks itself](https://github.com/lklynet/aurral/blob/main/docs/src/content/docs/integrations/lidarr.mdx), including playlist and flow tracks. Its [Lidarr client](https://github.com/lklynet/aurral/blob/main/backend/services/lidarrClient.js) sends `AlbumSearch` and `ArtistSearch`; those actions continue to have their existing meanings. Enabling Song Mode in this fork does not turn an Aurral album request into a song request.
+[Aurral currently downloads individual tracks itself](https://github.com/lklynet/aurral/blob/main/docs/src/content/docs/integrations/lidarr.mdx), including playlist and flow tracks. Its [Lidarr client](https://github.com/lklynet/aurral/blob/main/backend/services/lidarrClient.ts) sends `AlbumSearch` and `ArtistSearch`; those actions continue to have their existing meanings. Enabling Song Mode in this fork does not turn an Aurral album request into a song request.
 
 To route Aurral song requests through this fork, a future Aurral change can use the following API contract. All requests use the normal `X-Api-Key` header and `/api/v1` prefix.
 
 1. Probe `GET /track/capabilities`. This fork returns `{"trackSearch":true,"selectiveImport":true}`. A stock Lidarr instance can return 404; Aurral should retain its existing provider flow in that case.
 2. Ensure the artist and album metadata exist using the normal Lidarr APIs. Leave an album unmonitored when only selected songs are wanted. For ongoing per-song monitoring, set `songMode: true` on the artist through the existing artist update API.
 3. Fetch `GET /track?albumId=123` or `GET /track?artistId=456`. Match the requested MusicBrainz recording ID to `foreignRecordingId`, then use the returned numeric `id`. Track IDs and recording IDs are different identifiers.
-4. For ongoing monitoring, send `PUT /track/monitor` with `{"trackIds":[101,102],"monitored":true}`. Newly monitored tracks trigger a search. Monitor only the wanted songs across the artist's catalog; enabling Song Mode preserves existing monitoring selections.
-5. For an explicit one-time search, send `POST /command` with `{"name":"TrackSearch","trackIds":[101,102]}`. This works independently of whether those tracks are monitored. Avoid sending this immediately after a monitor update that already triggered a search.
+4. For ongoing monitoring, send `PUT /track/monitor` with `{"trackIds":[101,102],"monitored":true}`. This saves monitoring without starting a search. Monitor only the wanted songs across the artist's catalog; enabling Song Mode preserves existing partial selections.
+5. For an explicit one-time search, send `POST /command` with `{"name":"TrackSearch","trackIds":[101,102]}`. This works independently of whether the artist, album, or tracks are monitored.
 6. Follow the returned command ID and the existing queue/history APIs for progress.
 
 Aurral itself has not been modified in this repository. Its song-request integration and an end-to-end test with a running Aurral instance are separate work.
@@ -51,9 +51,9 @@ External transfer tools should extract archives in a per-download staging direct
 
 The remotes for this checkout are `origin` (`primetime43/Lidarr-Primetime`) and `upstream` (`Lidarr/Lidarr`). Keep custom features on the fork's `develop` branch and merge upstream `develop` into it; preserve the shared history for future merges.
 
-The **Sync upstream Lidarr** GitHub Actions workflow runs daily and supports manual runs. It merges upstream into the reserved `automation/sync-upstream` branch, checks for duplicate migration versions, runs the Song Mode regression tests, and opens or refreshes a pull request into `develop`. Review and merge that pull request to update the fork. Conflicts or failed tests stop the workflow and leave `develop` unchanged. The automation branch is regenerated, so do not put manual feature work on it.
+Automatic upstream synchronization is disabled. The **Sync upstream Lidarr** GitHub Action is disabled, and its scheduled trigger has been removed. Song Mode regression-test workflows remain separate from upstream synchronization.
 
-After pushing these workflow files, enable Actions for the fork and allow GitHub Actions to create pull requests in **Settings > Actions > General > Workflow permissions**. Scheduled workflows run from the repository's default branch; the workflow must be present there. Repository or organization policies can restrict these settings. [Pull-request workflows created by `GITHUB_TOKEN` can require approval](https://docs.github.com/en/actions/concepts/security/github_token), so the sync workflow runs its checks before opening the pull request.
+For an explicit automated update later, re-enable that workflow in GitHub Actions and run it manually. It proposes a merge on the reserved `automation/sync-upstream` branch, checks migration versions, runs the regression tests, and opens or refreshes a pull request into `develop`. Conflicts or failed tests leave `develop` unchanged. Review the proposal before merging. Do not put manual feature work on the regenerated automation branch.
 
 For a local update, start with a clean working tree:
 
