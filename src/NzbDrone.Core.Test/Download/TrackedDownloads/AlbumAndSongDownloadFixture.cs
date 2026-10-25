@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Download.TrackedDownloads;
 using NzbDrone.Core.History;
@@ -57,6 +58,19 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
         public void should_keep_recording_targets_for_an_album_used_to_download_one_song()
         {
             _history[0].Data["TargetRecordingIds"] = "[\"wanted\"]";
+
+            var download = Subject.TrackDownload(_client, Download()).DownloadItem;
+
+            download.IsFullAlbumRequest.Should().BeFalse();
+            download.TargetRecordingIds.Should().Equal("wanted");
+        }
+
+        [Test]
+        public void should_keep_requested_recordings_after_history_json_roundtrip()
+        {
+            _history[0].Data["TargetRecordingIds"] = "[\"wanted\"]";
+            _history[0].Data = Json.Deserialize<Dictionary<string, string>>(_history[0].Data.ToJson());
+            _history[0].Data.Should().ContainKey("targetRecordingIds");
 
             var download = Subject.TrackDownload(_client, Download()).DownloadItem;
 

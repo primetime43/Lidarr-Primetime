@@ -67,10 +67,10 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                 }
 
                 var importedHistory = historyItems.Where(item => item.EventType == EntityHistoryEventType.TrackFileImported).ToList();
-                var importedRecordingIds = importedHistory.Select(item => item.Data.GetValueOrDefault("RecordingId"))
+                var importedRecordingIds = importedHistory.Select(GetRecordingId)
                     .Where(id => id.IsNotNullOrWhiteSpace())
                     .ToHashSet();
-                var legacyTrackIds = importedHistory.Where(item => item.Data.GetValueOrDefault("RecordingId").IsNullOrWhiteSpace())
+                var legacyTrackIds = importedHistory.Where(item => GetRecordingId(item).IsNullOrWhiteSpace())
                     .Select(item => item.TrackId).Distinct().ToList();
 
                 if (legacyTrackIds.Any())
@@ -104,6 +104,11 @@ namespace NzbDrone.Core.Download.TrackedDownloads
             _logger.Trace("All albums for '{0}' have been imported: {1}", trackedDownload.DownloadItem.Title, allAlbumsImportedInHistory);
 
             return allAlbumsImportedInHistory;
+        }
+
+        private static string GetRecordingId(EntityHistory item)
+        {
+            return item.Data.GetValueOrDefault("recordingId") ?? item.Data.GetValueOrDefault("RecordingId");
         }
     }
 }

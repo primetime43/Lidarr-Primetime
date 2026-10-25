@@ -167,10 +167,12 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
                    .BeTrue();
         }
 
-        [TestCase("target", "target", false)]
-        [TestCase("target", "other", false)]
-        [TestCase("target", "second", true)]
-        public void should_require_history_for_every_requested_recording(string first, string second, bool complete)
+        [TestCase("target", "target", false, "RecordingId")]
+        [TestCase("target", "other", false, "RecordingId")]
+        [TestCase("target", "second", true, "RecordingId")]
+        [TestCase("target", "target", false, "recordingId")]
+        [TestCase("target", "second", true, "recordingId")]
+        public void should_require_history_for_every_requested_recording(string first, string second, bool complete, string key)
         {
             _trackedDownload.RemoteAlbum.TargetRecordingIds = new List<string> { "target", "second" };
             foreach (var recording in new[] { first, second })
@@ -178,7 +180,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
                 _historyItems.Add(new EntityHistory
                 {
                     EventType = EntityHistoryEventType.TrackFileImported,
-                    Data = new Dictionary<string, string> { { "RecordingId", recording } }
+                    Data = new Dictionary<string, string> { { key, recording } }
                 });
             }
 

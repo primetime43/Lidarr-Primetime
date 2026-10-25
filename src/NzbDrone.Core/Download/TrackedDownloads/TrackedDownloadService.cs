@@ -198,7 +198,8 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                         trackedDownload.RemoteAlbum.Release.IndexerFlags = flags;
                     }
 
-                    var serializedTargetRecordingIds = grabbedEvent?.Data?.GetValueOrDefault("TargetRecordingIds");
+                    var serializedTargetRecordingIds = grabbedEvent?.Data?.GetValueOrDefault("targetRecordingIds") ??
+                        grabbedEvent?.Data?.GetValueOrDefault("TargetRecordingIds");
 
                     if (serializedTargetRecordingIds.IsNotNullOrWhiteSpace())
                     {
