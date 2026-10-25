@@ -14,6 +14,8 @@ The Albums view keeps its normal album controls, including monitored album searc
 
 Click a song row or its checkbox to select it; Shift-click selects a range in the displayed order. Focus a row and press Space or Enter to toggle it with the keyboard. Buttons and links keep their normal actions.
 
+The **Library status** column marks songs as **Downloaded** or **Missing**. Downloaded rows have a subtle green tint and remain selectable for upgrade searches. The header shows downloaded and missing counts, and the **All songs / Missing / Downloaded** filter narrows the list without discarding hidden selections. Availability follows the recording across its album appearances; a different live recording or remix is tracked separately.
+
 The **Popularity** column shows each matched song's position in the artist's Deezer top tracks, with a link to the source. **Most popular** sorts those songs first; title and album sorting are also available. These are provider rankings, not community ratings or a measure of song quality. A dash means no confident match, not a bad song. Catalog matching checks title and duration, preserves live/remix versions, and requires multiple recordings to identify same-named artists unless metadata already supplies a Deezer artist link. Public catalog lookups need no API key and are cached for 12 hours; provider failures never block song selection or downloading.
 
 Selective downloads show **Wanted songs** below the album title in **Activity → Queue**. These titles come from the recordings saved with the download, so later checklist changes do not mislabel an in-flight download. Normal whole-album downloads keep their usual display.

@@ -23,6 +23,7 @@ import formatTimeSpan from 'Utilities/Date/formatTimeSpan';
 import formatBytes from 'Utilities/Number/formatBytes';
 import formatCustomFormatScore from 'Utilities/Number/formatCustomFormatScore';
 import translate from 'Utilities/String/translate';
+import { hasSongFile } from './songAvailability';
 import SongPopularityCell from './SongPopularityCell';
 import TrackActionsCell from './TrackActionsCell';
 import { canSelectTrackRow } from './trackRowSelection';
@@ -119,10 +120,11 @@ class TrackRow extends Component {
       deleteTrackFile,
       onSelectedChange
     } = this.props;
+    const isDownloaded = hasSongFile(this.props);
 
     return (
       <TableRow
-        className={isSelectMode && isRowSelectable ? classNames(styles.selectableRow, isSelected && styles.selectedRow) : undefined}
+        className={isSelectMode && isRowSelectable ? classNames(styles.selectableRow, isDownloaded && styles.downloadedRow, isSelected && styles.selectedRow) : undefined}
         onClick={isSelectMode && isRowSelectable ? this.onRowClick : undefined}
         onKeyDown={isSelectMode && isRowSelectable ? this.onRowKeyDown : undefined}
         tabIndex={isSelectMode && isRowSelectable && !isSelectionDisabled ? 0 : undefined}
@@ -327,15 +329,26 @@ class TrackRow extends Component {
             }
 
             if (name === 'status') {
+              const status = <EpisodeStatusConnector albumId={albumId} trackFileId={trackFileId} />;
               return (
                 <TableRowCell
                   key={name}
-                  className={styles.status}
+                  className={isRowSelectable ? styles.songStatus : styles.status}
                 >
-                  <EpisodeStatusConnector
-                    albumId={albumId}
-                    trackFileId={trackFileId}
-                  />
+                  {
+                    isRowSelectable ?
+                      <div className={styles.songStatusContent}>
+                        <span
+                          className={isDownloaded ? styles.downloadedStatus : styles.missingStatus}
+                          title={translate(isDownloaded ? 'SongDownloadedHelp' : 'SongMissingHelp')}
+                        >
+                          {isDownloaded && <Icon name={icons.CHECK} size={10} />}
+                          {translate(isDownloaded ? 'Downloaded' : 'Missing')}
+                        </span>
+                        {status}
+                      </div> :
+                      status
+                  }
                 </TableRowCell>
               );
             }
@@ -401,6 +414,7 @@ TrackRow.propTypes = {
   appearanceCount: PropTypes.number,
   popularity: PropTypes.object,
   trackFileId: PropTypes.number,
+  hasFile: PropTypes.bool,
   mediumNumber: PropTypes.number.isRequired,
   trackNumber: PropTypes.string.isRequired,
   absoluteTrackNumber: PropTypes.number,

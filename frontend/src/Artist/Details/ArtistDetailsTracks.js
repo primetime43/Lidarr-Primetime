@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
+import { hasSongFile } from 'Album/Details/songAvailability';
 import TrackRowConnector from 'Album/Details/TrackRowConnector';
 import Alert from 'Components/Alert';
 import SelectInput from 'Components/Form/SelectInput';
@@ -17,10 +18,10 @@ import styles from './ArtistDetailsTracks.css';
 
 const columns = [
   { name: 'title', label: () => translate('Title'), isVisible: true },
+  { name: 'status', label: () => translate('SongLibraryStatus'), isVisible: true },
   { name: 'album', label: () => translate('Album'), isVisible: true },
   { name: 'popularity', label: () => translate('Popularity'), isVisible: true },
   { name: 'duration', label: () => translate('Duration'), isVisible: true },
-  { name: 'status', label: () => translate('Status'), isVisible: true },
   { name: 'search', label: () => translate('Search'), isVisible: true },
   { name: 'actions', label: () => translate('Actions'), isVisible: true }
 ];
@@ -34,6 +35,7 @@ class ArtistDetailsTracks extends Component {
       lastToggled: null,
       query: '',
       sortKey: 'popularity',
+      libraryFilter: 'all',
       isDirty: false,
       isSaving: false,
       saveError: false,
@@ -58,6 +60,10 @@ class ArtistDetailsTracks extends Component {
     this.setState({ sortKey: value, lastToggled: null });
   };
 
+  onLibraryFilterChange = ({ value }) => {
+    this.setState({ libraryFilter: value, lastToggled: null });
+  };
+
   onClearPress = () => {
     this.setState({
       selectedState: Object.fromEntries(this.props.items.map((item) => [item.groupKey, false])),
@@ -72,7 +78,7 @@ class ArtistDetailsTracks extends Component {
     if (this.state.isSaving) {
       return;
     }
-    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey);
+    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey, this.state.libraryFilter);
     this.setState((state) => ({
       selectedState: { ...state.selectedState, ...Object.fromEntries(visible.map((item) => [item.groupKey, value])) },
       isDirty: true,
@@ -87,7 +93,7 @@ class ArtistDetailsTracks extends Component {
     if (this.state.isSaving || value == null || !!this.state.selectedState[id] === value) {
       return;
     }
-    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey).map((item) => ({ id: item.groupKey }));
+    const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey, this.state.libraryFilter).map((item) => ({ id: item.groupKey }));
     this.setState((state) => ({
       ...toggleSelected(state, visible, id, value, shiftKey),
       isDirty: true,
@@ -120,10 +126,10 @@ class ArtistDetailsTracks extends Component {
 
   render() {
     const { items, popularityStatus, artistSongMode } = this.props;
-    const { selectedState, query, sortKey, isSaving, isDirty, saveError, downloadError, downloadStarted, saved } = this.state;
-    const visible = filterSongs(items, query, sortKey);
+    const { selectedState, query, sortKey, libraryFilter, isSaving, isDirty, saveError, downloadError, downloadStarted, saved } = this.state;
+    const visible = filterSongs(items, query, sortKey, libraryFilter);
     const selectedCount = items.filter((item) => selectedState[item.groupKey]).length;
-    const fileCount = items.filter((item) => item.hasFile).length;
+    const fileCount = items.filter(hasSongFile).length;
     const allSelected = visible.length > 0 && visible.every((item) => selectedState[item.groupKey]);
     const allUnselected = visible.every((item) => !selectedState[item.groupKey]);
 
@@ -132,9 +138,10 @@ class ArtistDetailsTracks extends Component {
         <div className={styles.header}>
           <div className={styles.left}>
             <span className={styles.title}>{translate('Songs')}</span>
-            <Label kind={kinds.INFO} size={sizes.LARGE}>
-              {fileCount} / {items.length}
+            <Label kind={kinds.SUCCESS} size={sizes.LARGE}>
+              {translate('SongDownloadedCount', [fileCount])}
             </Label>
+            <span className={styles.missingCount}>{translate('SongMissingCount', [items.length - fileCount])}</span>
           </div>
           <div className={styles.actions}>
             <span className={styles.selectionCount}>
@@ -163,6 +170,19 @@ class ArtistDetailsTracks extends Component {
         </div>
         <div className={styles.filter}>
           <label>
+            {translate('SongLibraryStatus')}
+            <SelectInput
+              name="songLibraryFilter"
+              value={libraryFilter}
+              values={[
+                { key: 'all', value: translate('AllSongs') },
+                { key: 'missing', value: translate('Missing') },
+                { key: 'downloaded', value: translate('Downloaded') }
+              ]}
+              onChange={this.onLibraryFilterChange}
+            />
+          </label>
+          <label className={styles.searchFilter}>
             {translate('FindSongs')}
             <TextInput
               name="songFilter"

@@ -6,6 +6,8 @@ interface CssExports {
   'header': string;
   'help': string;
   'left': string;
+  'missingCount': string;
+  'searchFilter': string;
   'selectionCount': string;
   'songs': string;
   'title': string;

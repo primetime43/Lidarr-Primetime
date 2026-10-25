@@ -21,8 +21,11 @@ function load(file) {
     presets: [['@babel/preset-env', { targets: { node: 'current' } }], '@babel/preset-react']
   }).code;
   function localRequire(name) {
-    if (['react', 'prop-types', 'classnames', 'lodash'].includes(name)) return require(name);
-    if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => key });
+    if (['react', 'prop-types', 'classnames', 'lodash', 'reselect'].includes(name)) return require(name);
+    if (name === 'react-redux') return { connect: () => (component) => component };
+    if (name === 'Album/Details/songAvailability') return load(path.join(root, 'Album/Details/songAvailability.js'));
+    if (name === './songAvailability') return load(path.join(path.dirname(file), 'songAvailability.js'));
+    if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => key }) };
     if (name === 'Helpers/Props') return { kinds: { INFO: 'info', SUCCESS: 'success', PRIMARY: 'primary', DANGER: 'danger' }, sizes: { LARGE: 'large' }, icons: {} };
     if (name === 'Utilities/String/translate') return (key, args = []) => (translations[key] || key).replace(/\{(\d+)\}/g, (_, index) => args[index]);
     if (name.startsWith('Utilities/Table/')) return load(path.join(root, `${name}.js`));
@@ -43,6 +46,7 @@ const ArtistSongs = load(path.join(root, 'Artist/Details/ArtistDetailsTracks.js'
 const QueueRow = load(path.join(root, 'Activity/Queue/QueueRow.js')).default;
 const TrackRow = load(path.join(root, 'Album/Details/TrackRow.js')).default;
 const SongPopularityCell = load(path.join(root, 'Album/Details/SongPopularityCell.js')).default;
+const { createArtistSongs } = load(path.join(root, 'Artist/Details/ArtistDetailsTracksConnector.js'));
 const songs = [
   { id: 1, groupKey: 'one', title: 'Song One', albumTitle: 'Album A', monitored: true, monitorTrackIds: [1, 11] },
   { id: 2, groupKey: 'two', title: 'Song Two', albumTitle: 'Album B', monitored: false, monitorTrackIds: [2, 22] }
@@ -315,4 +319,66 @@ test('Songs works for album-monitored artists without requiring a mode change or
   assert.match(output, /Download selected/);
   assert.match(output, /Album monitoring stays unchanged/);
   assert.doesNotMatch(output, /Save monitored songs/);
+});
+
+test('downloaded recordings on another album are grouped once with the owned file as representative', () => {
+  const grouped = createArtistSongs([
+    { id: 1, albumId: 10, foreignRecordingId: 'recording', title: 'Same song', duration: 1000, hasFile: false, monitored: true },
+    { id: 2, albumId: 20, foreignRecordingId: 'recording', title: 'Same song', duration: 1000, trackFileId: 99, monitored: false },
+    { id: 3, albumId: 10, foreignRecordingId: 'live-recording', title: 'Same song (live)', duration: 1000, trackFileId: 0 }
+  ], [{ id: 10, title: 'Original', albumType: 'Album' }, { id: 20, title: 'Compilation', albumType: 'Album' }]);
+  const owned = grouped.find((song) => song.groupKey === 'recording');
+  assert.equal(owned.hasFile, true);
+  assert.equal(owned.id, 2);
+  assert.equal(owned.trackFileId, 99);
+  assert.deepEqual(filterSongs(grouped, '', 'title', 'downloaded'), [owned]);
+  assert.deepEqual(filterSongs(grouped, '', 'title', 'missing').map((song) => song.groupKey), ['live-recording']);
+});
+
+test('availability filters preserve hidden choices and select-all affects only visible missing songs', () => {
+  const component = panel();
+  component.props = { ...component.props, items: [
+    { ...songs[0], hasFile: true }, { ...songs[1], hasFile: false }
+  ] };
+  component.onLibraryFilterChange({ value: 'missing' });
+  component.onSelectAllChange({ value: true });
+  assert.deepEqual(component.state.selectedState, { one: true, two: true });
+  component.onSelectAllChange({ value: false });
+  assert.deepEqual(component.state.selectedState, { one: true, two: false });
+  component.onLibraryFilterChange({ value: 'downloaded' });
+  component.onSelectAllChange({ value: false });
+  assert.deepEqual(component.state.selectedState, { one: false, two: false });
+  assert.equal(component.state.lastToggled, null);
+});
+
+test('song rows show downloaded/missing text and downloaded shading without disabling upgrade selection', () => {
+  const { row, calls } = selectableRow({ trackFileId: 99, columns: [{ name: 'status', isVisible: true }] });
+  const rendered = row.render();
+  assert.match(textOf(rendered), /Downloaded/);
+  assert.match(rendered.props.className, /downloadedRow/);
+  row.onRowClick(rowEvent());
+  assert.equal(calls[0].value, true);
+  row.props = { ...row.props, trackFileId: 0, hasFile: false };
+  assert.match(textOf(row.render()), /Missing/);
+  assert.doesNotMatch(row.render().props.className, /downloadedRow/);
+  row.props = { ...row.props, isRowSelectable: false };
+  assert.doesNotMatch(textOf(row.render()), /Downloaded|Missing/);
+});
+
+test('downloaded selection keeps its downloaded appearance and shows a separate selected state', () => {
+  const { row } = selectableRow({ trackFileId: 99, isSelected: true, columns: [] });
+  assert.match(row.render().props.className, /downloadedRow/);
+  assert.match(row.render().props.className, /selectedRow/);
+  assert.equal(row.render().props['aria-selected'], true);
+});
+
+test('song counts describe library availability and rows update when an imported file arrives', () => {
+  const component = panel();
+  component.props = { ...component.props, items: [{ ...songs[0], trackFileId: 99 }, { ...songs[1], hasFile: false }] };
+  assert.match(textOf(component.render()), /1 downloaded/);
+  assert.match(textOf(component.render()), /1 missing/);
+  const { row } = selectableRow({ trackFileId: 0, columns: [{ name: 'status', isVisible: true }] });
+  assert.match(textOf(row.render()), /Missing/);
+  row.props = { ...row.props, trackFileId: 99 };
+  assert.match(textOf(row.render()), /Downloaded/);
 });

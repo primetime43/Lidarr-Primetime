@@ -18,8 +18,14 @@
 .left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   padding: 15px 10px;
-  white-space: nowrap;
+  gap: 8px;
+}
+
+.missingCount {
+  color: var(--helpTextColor);
+  font-size: $smallFontSize;
 }
 
 .title {
@@ -59,9 +65,10 @@
   max-width: 800px;
   gap: 15px;
 
-  label:first-child {
-    flex: 1 1 300px;
-  }
+}
+
+.searchFilter {
+  flex: 1 1 300px;
 }
 
 @media only screen and (max-width: $breakpointSmall) {

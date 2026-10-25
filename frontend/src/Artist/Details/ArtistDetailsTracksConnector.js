@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
+import { hasSongFile } from 'Album/Details/songAvailability';
 import * as commandNames from 'Commands/commandNames';
 import { toggleArtistMonitored } from 'Store/Actions/artistActions';
 import { executeCommand } from 'Store/Actions/commandActions';
@@ -39,7 +40,7 @@ function getRepresentative(tracks, albumsById) {
   return _.orderBy(
     tracks,
     [
-      (track) => track.hasFile,
+      hasSongFile,
       (track) => track.monitored,
       (track) => getAlbumPriority(albumsById[track.albumId]),
       (track) => albumsById[track.albumId].releaseDate || '9999-12-31',
@@ -66,7 +67,7 @@ export function createArtistSongs(tracks, albums) {
       monitorTrackIds: _.uniq(appearances.map((track) => track.id)),
       monitored: appearances.some((track) => track.monitored),
       isSaving: appearances.some((track) => track.isSaving),
-      hasFile: appearances.some((track) => track.hasFile),
+      hasFile: appearances.some(hasSongFile),
       appearanceCount: _.uniq(appearances.map((track) => track.albumId)).length
     };
   });

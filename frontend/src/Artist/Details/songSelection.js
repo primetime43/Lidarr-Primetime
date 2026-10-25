@@ -1,3 +1,5 @@
+import { hasSongFile } from 'Album/Details/songAvailability';
+
 // Selection is a draft until saved; filtering must never discard hidden choices.
 export function createSongSelection(items, artistSongMode = true) {
   return Object.fromEntries(items.map((item) => [item.groupKey, artistSongMode && item.monitored]));
@@ -10,9 +12,11 @@ export async function downloadSongSelection({ items, selectedState, search }) {
   }
 }
 
-export function filterSongs(items, query, sortKey = 'popularity') {
+export function filterSongs(items, query, sortKey = 'popularity', libraryFilter = 'all') {
   const search = query.trim().toLocaleLowerCase();
-  return items.filter((item) => `${item.title} ${item.albumTitle}`.toLocaleLowerCase().includes(search))
+  return items.filter((item) => `${item.title} ${item.albumTitle}`.toLocaleLowerCase().includes(search) &&
+      (libraryFilter !== 'downloaded' || hasSongFile(item)) &&
+      (libraryFilter !== 'missing' || !hasSongFile(item)))
     .sort((left, right) => {
       const titleOrder = left.title.localeCompare(right.title);
       if (sortKey === 'title') {
