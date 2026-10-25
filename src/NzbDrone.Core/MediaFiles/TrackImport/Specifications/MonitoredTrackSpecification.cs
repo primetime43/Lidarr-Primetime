@@ -35,7 +35,7 @@ namespace NzbDrone.Core.MediaFiles.TrackImport.Specifications
                 return Decision.Reject("Track was not targeted by this download");
             }
 
-            if (item.Tracks.Any(track => track.Monitored))
+            if (downloadClientItem?.IsFullAlbumRequest == true || item.Tracks.Any(track => track.Monitored))
             {
                 return Decision.Accept();
             }

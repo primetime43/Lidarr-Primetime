@@ -38,8 +38,34 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                 return true;
             }
 
-            if (trackedDownload.RemoteAlbum.TargetRecordingIds?.Any() == true)
+            if (trackedDownload.RemoteAlbum.TargetRecordingIds?.Any() == true || trackedDownload.DownloadItem.IsFullAlbumRequest)
             {
+                var requiredRecordingIds = trackedDownload.RemoteAlbum.TargetRecordingIds;
+                if (requiredRecordingIds?.Any() != true)
+                {
+                    if (trackedDownload.RemoteAlbum.Albums?.Any() != true)
+                    {
+                        return false;
+                    }
+
+                    if (trackedDownload.RemoteAlbum.Albums.All(album => historyItems.Any(item =>
+                        item.AlbumId == album.Id && item.EventType == EntityHistoryEventType.DownloadImported)))
+                    {
+                        return true;
+                    }
+
+                    requiredRecordingIds = trackedDownload.RemoteAlbum.Albums
+                        .SelectMany(album => album.AlbumReleases?.Value ?? new List<AlbumRelease>())
+                        .Where(release => release.Monitored)
+                        .SelectMany(release => release.Tracks?.Value ?? new List<Track>())
+                        .Select(track => track.ForeignRecordingId)
+                        .Where(id => id.IsNotNullOrWhiteSpace()).Distinct().ToList();
+                    if (!requiredRecordingIds.Any())
+                    {
+                        return false;
+                    }
+                }
+
                 var importedHistory = historyItems.Where(item => item.EventType == EntityHistoryEventType.TrackFileImported).ToList();
                 var importedRecordingIds = importedHistory.Select(item => item.Data.GetValueOrDefault("RecordingId"))
                     .Where(id => id.IsNotNullOrWhiteSpace())
@@ -52,7 +78,7 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                     importedRecordingIds.UnionWith(_trackService.GetTracks(legacyTrackIds).Select(track => track.ForeignRecordingId));
                 }
 
-                return trackedDownload.RemoteAlbum.TargetRecordingIds.All(importedRecordingIds.Contains);
+                return requiredRecordingIds.All(importedRecordingIds.Contains);
             }
 
             if (trackedDownload.RemoteAlbum.Albums == null)

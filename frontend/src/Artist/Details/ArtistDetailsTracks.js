@@ -6,6 +6,7 @@ import SelectInput from 'Components/Form/SelectInput';
 import TextInput from 'Components/Form/TextInput';
 import Label from 'Components/Label';
 import Button from 'Components/Link/Button';
+import Link from 'Components/Link/Link';
 import Table from 'Components/Table/Table';
 import TableBody from 'Components/Table/TableBody';
 import { kinds, sizes } from 'Helpers/Props';
@@ -29,20 +30,23 @@ class ArtistDetailsTracks extends Component {
   constructor(props, context) {
     super(props, context);
     this.state = {
-      selectedState: createSongSelection(props.items),
+      selectedState: createSongSelection(props.items, props.artistSongMode),
       lastToggled: null,
       query: '',
       sortKey: 'popularity',
       isDirty: false,
       isSaving: false,
       saveError: false,
+      downloadError: false,
+      downloadStarted: false,
       saved: false
     };
   }
 
   componentDidUpdate(prevProps) {
-    if (prevProps.items !== this.props.items && !this.state.isDirty && !this.state.isSaving) {
-      this.setState({ selectedState: createSongSelection(this.props.items) });
+    if (!this.state.isDirty && !this.state.isSaving &&
+        (prevProps.artistSongMode !== this.props.artistSongMode || (this.props.artistSongMode && prevProps.items !== this.props.items))) {
+      this.setState({ selectedState: createSongSelection(this.props.items, this.props.artistSongMode) });
     }
   }
 
@@ -59,6 +63,7 @@ class ArtistDetailsTracks extends Component {
       selectedState: Object.fromEntries(this.props.items.map((item) => [item.groupKey, false])),
       isDirty: true,
       saved: false,
+      downloadStarted: false,
       lastToggled: null
     });
   };
@@ -71,21 +76,23 @@ class ArtistDetailsTracks extends Component {
     this.setState((state) => ({
       selectedState: { ...state.selectedState, ...Object.fromEntries(visible.map((item) => [item.groupKey, value])) },
       isDirty: true,
-      saved: false
+      saved: false,
+      downloadStarted: false
     }));
   };
 
   onSelectedChange = ({ id, value, shiftKey = false }) => {
     // TableSelectCell registers on mount and unregisters on unmount. Filtering
     // unmounts rows, but must not change the user's draft wanted list.
-    if (this.state.isSaving || value == null || this.state.selectedState[id] === value) {
+    if (this.state.isSaving || value == null || !!this.state.selectedState[id] === value) {
       return;
     }
     const visible = filterSongs(this.props.items, this.state.query, this.state.sortKey).map((item) => ({ id: item.groupKey }));
     this.setState((state) => ({
       ...toggleSelected(state, visible, id, value, shiftKey),
       isDirty: true,
-      saved: false
+      saved: false,
+      downloadStarted: false
     }));
   };
 
@@ -93,12 +100,17 @@ class ArtistDetailsTracks extends Component {
     if (this.state.isSaving) {
       return;
     }
-    this.setState({ isSaving: true, saveError: false, saved: false });
+    this.setState({ isSaving: true, saveError: false, downloadError: false, downloadStarted: false, saved: false });
     try {
-      await this.props.onSongsSelectionSave(this.state.selectedState, download);
-      this.setState({ isSaving: false, isDirty: false, saved: true });
+      if (download) {
+        await this.props.onSongsDownload(this.state.selectedState);
+        this.setState({ isSaving: false, downloadStarted: true });
+      } else {
+        await this.props.onSongsSelectionSave(this.state.selectedState);
+        this.setState({ isSaving: false, isDirty: false, saved: true });
+      }
     } catch {
-      this.setState({ isSaving: false, isDirty: true, saveError: true });
+      this.setState({ isSaving: false, isDirty: true, saveError: !download, downloadError: download });
     }
   };
 
@@ -107,8 +119,8 @@ class ArtistDetailsTracks extends Component {
   onDownloadSelectedPress = () => this.onSavePress(true);
 
   render() {
-    const { items, popularityStatus } = this.props;
-    const { selectedState, query, sortKey, isSaving, isDirty, saveError, saved } = this.state;
+    const { items, popularityStatus, artistSongMode } = this.props;
+    const { selectedState, query, sortKey, isSaving, isDirty, saveError, downloadError, downloadStarted, saved } = this.state;
     const visible = filterSongs(items, query, sortKey);
     const selectedCount = items.filter((item) => selectedState[item.groupKey]).length;
     const fileCount = items.filter((item) => item.hasFile).length;
@@ -131,18 +143,23 @@ class ArtistDetailsTracks extends Component {
             <Button isDisabled={isSaving || !selectedCount} onPress={this.onClearPress}>
               {translate('ClearSelection')}
             </Button>
-            <Button isDisabled={isSaving || !isDirty} onPress={this.onSaveSelectionPress}>
-              {translate('SaveSelection')}
-            </Button>
+            {
+              artistSongMode &&
+                <Button isDisabled={isSaving || !isDirty} onPress={this.onSaveSelectionPress}>
+                  {translate('SaveMonitoredSongs')}
+                </Button>
+            }
             <Button kind={kinds.PRIMARY} isDisabled={isSaving || !selectedCount}
               onPress={this.onDownloadSelectedPress}
             >
-              {isSaving ? translate('Saving') : translate('DownloadSelectedSongs')}
+              {isSaving ? translate('Working') : translate('DownloadSelectedSongs')}
             </Button>
           </div>
         </div>
         <div className={styles.help}>
           {translate('SongSelectionHelpText')}
+          {' '}
+          {translate(artistSongMode ? 'SongMonitoringSelectionHelp' : 'SongDownloadKeepsAlbumMonitoring')}
         </div>
         <div className={styles.filter}>
           <label>
@@ -174,6 +191,17 @@ class ArtistDetailsTracks extends Component {
         {
           saveError &&
             <Alert kind={kinds.DANGER} role="alert">{translate('SongSelectionSaveError')}</Alert>
+        }
+        {
+          downloadError &&
+            <Alert kind={kinds.DANGER} role="alert">{translate('SongDownloadError')}</Alert>
+        }
+        {
+          downloadStarted &&
+            <Alert kind={kinds.SUCCESS} role="status">
+              {translate('SongDownloadSearchStarted')}
+              {' '}<Link to="/activity/queue">{translate('Queue')}</Link>
+            </Alert>
         }
         {
           saved &&
@@ -217,8 +245,10 @@ class ArtistDetailsTracks extends Component {
 
 ArtistDetailsTracks.propTypes = {
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
+  artistSongMode: PropTypes.bool.isRequired,
   popularityStatus: PropTypes.string,
-  onSongsSelectionSave: PropTypes.func.isRequired
+  onSongsSelectionSave: PropTypes.func.isRequired,
+  onSongsDownload: PropTypes.func.isRequired
 };
 
 export default ArtistDetailsTracks;

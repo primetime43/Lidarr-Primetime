@@ -33,7 +33,7 @@ namespace NzbDrone.Core.Parser.Model
             return Albums.Any(e => e.ReleaseDate >= DateTime.UtcNow.Date.AddDays(-14));
         }
 
-        public int MonitoredTrackCount()
+        public int MonitoredTrackCount(bool includeUnmonitored = false)
         {
             if (TargetRecordingIds?.Any() == true)
             {
@@ -42,7 +42,7 @@ namespace NzbDrone.Core.Parser.Model
 
             return Albums.Sum(album => album.AlbumReleases.Value
                 .Where(release => release.Monitored)
-                .Sum(release => release.Tracks?.Value?.Count(track => track.Monitored) ?? release.TrackCount));
+                .Sum(release => release.Tracks?.Value?.Count(track => includeUnmonitored || track.Monitored) ?? release.TrackCount));
         }
 
         public List<string> MonitoredRecordingIds()

@@ -40,6 +40,13 @@ jobs:
           -p:SolutionDir="${{ github.workspace }}/src/"
           -p:RuntimeIdentifiers=linux-x64
           --filter 'FullyQualifiedName~SongPopularityServiceFixture'
+      - name: Test Song Mode defaults and external transfer imports
+        run: >-
+          dotnet test src/NzbDrone.Core.Test/Lidarr.Core.Test.csproj
+          --configuration Debug --no-restore
+          -p:SolutionDir="${{ github.workspace }}/src/"
+          -p:RuntimeIdentifiers=linux-x64
+          --filter 'FullyQualifiedName~SongModeSelectionFixture|FullyQualifiedName~TrackRepositorySongModeFixture|FullyQualifiedName~DownloadedAlbumsCommandServiceFixture|FullyQualifiedName~AlbumAndSongDownloadFixture'
       - name: Build the application and API
         run: >-
           dotnet build src/NzbDrone.Console/Lidarr.Console.csproj

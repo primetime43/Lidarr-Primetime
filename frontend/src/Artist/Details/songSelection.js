@@ -1,6 +1,13 @@
 // Selection is a draft until saved; filtering must never discard hidden choices.
-export function createSongSelection(items) {
-  return Object.fromEntries(items.map((item) => [item.groupKey, item.monitored]));
+export function createSongSelection(items, artistSongMode = true) {
+  return Object.fromEntries(items.map((item) => [item.groupKey, artistSongMode && item.monitored]));
+}
+
+export async function downloadSongSelection({ items, selectedState, search }) {
+  const selected = items.filter((item) => selectedState[item.groupKey]);
+  if (selected.length) {
+    await search(selected.map((item) => item.id));
+  }
 }
 
 export function filterSongs(items, query, sortKey = 'popularity') {

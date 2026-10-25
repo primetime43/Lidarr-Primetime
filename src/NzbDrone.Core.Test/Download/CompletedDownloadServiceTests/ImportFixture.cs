@@ -109,6 +109,48 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
                 .Returns(BuildRemoteAlbum().Artist);
         }
 
+        [Test]
+        public void should_preserve_a_whole_album_request_for_a_separate_import_item()
+        {
+            var importItem = new DownloadClientItem { OutputPath = _trackedDownload.DownloadItem.OutputPath };
+            _trackedDownload.DownloadItem.IsFullAlbumRequest = true;
+            Mocker.GetMock<IProvideImportItemService>()
+                .Setup(service => service.ProvideImportItem(It.IsAny<DownloadClientItem>(), It.IsAny<DownloadClientItem>()))
+                .Returns(importItem);
+            Mocker.GetMock<IDownloadedTracksImportService>()
+                .Setup(service => service.ProcessPath(It.IsAny<string>(), ImportMode.Auto, It.IsAny<Artist>(), importItem))
+                .Returns(new List<ImportResult>());
+
+            Subject.Import(_trackedDownload);
+
+            importItem.IsFullAlbumRequest.Should().BeTrue();
+        }
+
+        [Test]
+        public void should_not_count_only_monitored_songs_for_an_incomplete_whole_album_import()
+        {
+            _trackedDownload.DownloadItem.IsFullAlbumRequest = true;
+            var first = new Track { ForeignRecordingId = "first", Monitored = false };
+            var second = new Track { ForeignRecordingId = "second", Monitored = false };
+            _trackedDownload.RemoteAlbum.Albums = new List<Album>
+            {
+                new Album
+                {
+                    AlbumReleases = new List<AlbumRelease>
+                    {
+                        new AlbumRelease { Monitored = true, TrackCount = 2, Tracks = new List<Track> { first, second } }
+                    }
+                }
+            };
+            var results = new List<ImportResult>
+            {
+                new ImportResult(new ImportDecision<LocalTrack>(new LocalTrack { Tracks = new List<Track> { first } })),
+                new ImportResult(new ImportDecision<LocalTrack>(new LocalTrack { Tracks = new List<Track> { second } }, new Rejection("Unidentified")), "Unidentified")
+            };
+
+            Subject.VerifyImport(_trackedDownload, results).Should().BeFalse();
+        }
+
         private void GivenArtistMatch()
         {
             Mocker.GetMock<IParsingService>()

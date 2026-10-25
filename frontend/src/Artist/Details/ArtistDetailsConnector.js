@@ -6,7 +6,7 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { clearAlbums, fetchAlbums } from 'Store/Actions/albumActions';
-import { setArtistSongMode, toggleArtistMonitored } from 'Store/Actions/artistActions';
+import { toggleArtistMonitored } from 'Store/Actions/artistActions';
 import { executeCommand } from 'Store/Actions/commandActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
 import { clearTracks, fetchTracks } from 'Store/Actions/trackActions';
@@ -37,6 +37,7 @@ const selectAlbums = createSelector(
       albumsError: error,
       hasAlbums,
       hasMonitoredAlbums,
+      monitoredAlbumIds: items.filter((album) => album.monitored).map((album) => album.id),
       albumTypes
     };
   }
@@ -106,6 +107,7 @@ function createMapStateToProps() {
         albumsError,
         hasAlbums,
         hasMonitoredAlbums,
+        monitoredAlbumIds,
         albumTypes
       } = albums;
 
@@ -135,7 +137,8 @@ function createMapStateToProps() {
         !artistRefreshingCommand.body.artistId
       );
       const isRefreshing = isArtistRefreshing || allArtistRefreshing;
-      const isSearching = isCommandExecuting(findCommand(commands, { name: commandNames.ARTIST_SEARCH, artistId: artist.id }));
+      const isSearching = isCommandExecuting(findCommand(commands, { name: commandNames.ARTIST_SEARCH, artistId: artist.id })) ||
+        commands.some((command) => command.name === commandNames.ALBUM_SEARCH && isCommandExecuting(command) && (command.body.albumIds || []).some((id) => monitoredAlbumIds.includes(id)));
       const isRenamingFiles = isCommandExecuting(findCommand(commands, { name: commandNames.RENAME_FILES, artistId: artist.id }));
       const isRenamingArtistCommand = findCommand(commands, { name: commandNames.RENAME_ARTIST });
       const isRenamingArtist = (
@@ -172,6 +175,7 @@ function createMapStateToProps() {
         trackFilesError,
         hasAlbums,
         hasMonitoredAlbums,
+        monitoredAlbumIds,
         hasTracks,
         hasMonitoredTracks,
         hasTrackFiles,
@@ -190,15 +194,12 @@ const mapDispatchToProps = {
   fetchTrackFiles,
   clearTrackFiles,
   toggleArtistMonitored,
-  setArtistSongMode,
   fetchQueueDetails,
   clearQueueDetails,
   executeCommand
 };
 
 class ArtistDetailsConnector extends Component {
-
-  state = { songModeError: false };
 
   //
   // Lifecycle
@@ -269,15 +270,6 @@ class ArtistDetailsConnector extends Component {
     });
   };
 
-  onSongModePress = async() => {
-    this.setState({ songModeError: false });
-    try {
-      await this.props.setArtistSongMode({ artistId: this.props.id, songMode: !this.props.songMode });
-    } catch {
-      this.setState({ songModeError: true });
-    }
-  };
-
   onRefreshPress = () => {
     this.props.executeCommand({
       name: commandNames.REFRESH_ARTIST,
@@ -287,8 +279,8 @@ class ArtistDetailsConnector extends Component {
 
   onSearchPress = () => {
     this.props.executeCommand({
-      name: commandNames.ARTIST_SEARCH,
-      artistId: this.props.id
+      name: commandNames.ALBUM_SEARCH,
+      albumIds: this.props.monitoredAlbumIds
     });
   };
 
@@ -299,8 +291,6 @@ class ArtistDetailsConnector extends Component {
     return (
       <ArtistDetails
         {...this.props}
-        songModeError={this.state.songModeError}
-        onSongModePress={this.onSongModePress}
         onMonitorTogglePress={this.onMonitorTogglePress}
         onRefreshPress={this.onRefreshPress}
         onSearchPress={this.onSearchPress}
@@ -324,11 +314,11 @@ ArtistDetailsConnector.propTypes = {
   fetchTrackFiles: PropTypes.func.isRequired,
   clearTrackFiles: PropTypes.func.isRequired,
   toggleArtistMonitored: PropTypes.func.isRequired,
-  setArtistSongMode: PropTypes.func.isRequired,
   songMode: PropTypes.bool.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
   clearQueueDetails: PropTypes.func.isRequired,
-  executeCommand: PropTypes.func.isRequired
+  executeCommand: PropTypes.func.isRequired,
+  monitoredAlbumIds: PropTypes.arrayOf(PropTypes.number).isRequired
 };
 
 export default connect(createMapStateToProps, mapDispatchToProps)(ArtistDetailsConnector);

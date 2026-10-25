@@ -4,9 +4,13 @@ Song Mode lets you choose any song or several songs from an album. A song does n
 
 ## Choose songs
 
-Open an artist and click **Song Mode** in the toolbar. Check the songs you want and click **Download selected**. The catalog is open immediately, with a song/album filter. **Clear selection** starts a fresh checklist, and **Save selection** changes monitoring without starting a search (including saving an empty selection to stop monitoring all songs). These actions apply to this artist only. Checked songs hidden by the filter remain selected. Downloading automatically enables artist monitoring so future missing-song and quality searches work.
+Open an artist and click the visible **Songs** tab or toolbar shortcut. **Albums** remains available alongside it. Songs also has a direct link at `/artist/{foreignArtistId}?view=songs`, and browser Back/Forward follows view changes. Switching views preserves the current song draft; selecting another artist starts that artist's own checklist.
 
-The checklist initially reflects existing monitoring. Switching modes or changing checkboxes does not alter saved monitoring until you save or download. Saving monitors only the checked songs, but never deletes existing music or cancels already-grabbed downloads. Switch back with **Album Mode** in the toolbar.
+Check the songs you want and click **Download selected**. This starts a one-time song search without changing album monitoring, artist monitoring, or the artist's monitoring policy. For artists using normal album monitoring, the song checklist starts empty rather than inheriting album defaults. **Clear selection** starts a fresh checklist. Checked songs hidden by the filter remain selected. A status message links to **Activity → Queue** after the search starts.
+
+Artists already configured for ongoing Song Mode monitoring retain their saved song selections and an additional **Save monitored songs** action. Saving updates only the checked songs' monitoring without starting a search. Downloading is separate from saving. Enabling that monitoring policy clears inherited defaults when every track is monitored and preserves existing partial selections. Existing music and in-flight downloads are preserved.
+
+The Albums view keeps its normal album controls, including monitored album searches, even when the artist uses song monitoring. Whole-album grabs and targeted song grabs keep distinct import intent, so requesting an album imports the album while requesting a few songs imports only those recordings. Merely opening either view changes no settings.
 
 Click a song row or its checkbox to select it; Shift-click selects a range in the displayed order. Focus a row and press Space or Enter to toggle it with the keyboard. Buttons and links keep their normal actions.
 
@@ -38,6 +42,8 @@ To route Aurral song requests through this fork, a future Aurral change can use 
 6. Follow the returned command ID and the existing queue/history APIs for progress.
 
 Aurral itself has not been modified in this repository. Its song-request integration and an end-to-end test with a running Aurral instance are separate work.
+
+External transfer tools should extract archives in a per-download staging directory, then send `DownloadedAlbumsScan` with the extracted directory's container-visible `path`, the original `downloadClientId`, and `importMode: "Copy"`. The download ID preserves the wanted recording list through import and completion checks. Keep staging data until history confirms `downloadImported`; a completed transfer or disappeared queue row alone does not confirm a library import. Packed archive files are reported with extraction instructions.
 
 ## Keep the fork current
 

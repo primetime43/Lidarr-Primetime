@@ -44,6 +44,44 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
                                                .BuildList());
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void should_require_every_recording_in_whole_album_history_even_when_songs_are_unmonitored(bool complete)
+        {
+            _trackedDownload.DownloadItem.IsFullAlbumRequest = true;
+            _albums.Add(new Album
+            {
+                Id = 1,
+                AlbumReleases = new List<AlbumRelease>
+                {
+                    new AlbumRelease
+                    {
+                        Monitored = true,
+                        Tracks = new List<Track>
+                        {
+                            new Track { ForeignRecordingId = "first", Monitored = false },
+                            new Track { ForeignRecordingId = "second", Monitored = false }
+                        }
+                    }
+                }
+            });
+            _historyItems.Add(new EntityHistory
+            {
+                AlbumId = 1, EventType = EntityHistoryEventType.TrackFileImported,
+                Data = new Dictionary<string, string> { { "RecordingId", "first" } }
+            });
+            if (complete)
+            {
+                _historyItems.Add(new EntityHistory
+                {
+                    AlbumId = 1, EventType = EntityHistoryEventType.TrackFileImported,
+                    Data = new Dictionary<string, string> { { "RecordingId", "second" } }
+                });
+            }
+
+            Subject.IsImported(_trackedDownload, _historyItems).Should().Be(complete);
+        }
+
         public void GivenHistoryForEpisode(Album episode, params EntityHistoryEventType[] eventTypes)
         {
             foreach (var eventType in eventTypes)

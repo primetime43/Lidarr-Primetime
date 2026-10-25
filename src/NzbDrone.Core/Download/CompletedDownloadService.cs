@@ -194,7 +194,7 @@ namespace NzbDrone.Core.Download
                 (importResults.Any(c => c.Result == ImportResultType.Imported) &&
                  importResults.Where(c => c.Result == ImportResultType.Imported)
                      .SelectMany(c => c.ImportDecision.Item.Tracks)
-                     .Count() >= trackedDownload.RemoteAlbum.MonitoredTrackCount());
+                     .Count() >= trackedDownload.RemoteAlbum.MonitoredTrackCount(trackedDownload.DownloadItem.IsFullAlbumRequest));
 
             if (trackedDownload.RemoteAlbum.TargetRecordingIds?.Any() == true)
             {
@@ -267,6 +267,7 @@ namespace NzbDrone.Core.Download
         private void SetImportItem(TrackedDownload trackedDownload)
         {
             trackedDownload.ImportItem = _provideImportItemService.ProvideImportItem(trackedDownload.DownloadItem, trackedDownload.ImportItem);
+            trackedDownload.ImportItem.IsFullAlbumRequest = trackedDownload.DownloadItem.IsFullAlbumRequest;
 
             // Some clients create a new import item instead of returning the tracked download item.
             if (trackedDownload.RemoteAlbum?.TargetRecordingIds?.Any() == true)

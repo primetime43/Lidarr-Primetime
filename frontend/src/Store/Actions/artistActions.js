@@ -7,7 +7,7 @@ import { createThunk, handleThunks } from 'Store/thunks';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import dateFilterPredicate from 'Utilities/Date/dateFilterPredicate';
 import translate from 'Utilities/String/translate';
-import { set, updateItem } from './baseActions';
+import { set, update, updateItem } from './baseActions';
 import createFetchHandler from './Creators/createFetchHandler';
 import createHandleActions from './Creators/createHandleActions';
 import createRemoveItemHandler from './Creators/createRemoveItemHandler';
@@ -262,9 +262,22 @@ export const actionHandlers = handleThunks({
       data: JSON.stringify({ ...artist, songMode }),
       dataType: 'json'
     }).request;
-    promise.done((data) => dispatch(updateItem({ ...data, section, isSaving: false })));
-    promise.fail(() => dispatch(updateItem({ id, section, isSaving: false })));
-    return promise;
+    const saved = promise.then((data) => {
+      if (!songMode) {
+        dispatch(updateItem({ ...data, section, isSaving: false }));
+        return;
+      }
+      // Load the new checklist before displaying Song Mode. The server may
+      // have cleared monitoring inherited from album mode.
+      return createAjaxRequest({ url: '/track', data: { artistId: id }, dataType: 'json' }).request.then((tracks) => {
+        dispatch(batchActions([
+          update({ section: 'tracks', data: tracks }),
+          updateItem({ ...data, section, isSaving: false })
+        ]));
+      });
+    });
+    saved.fail(() => dispatch(updateItem({ id, section, isSaving: false })));
+    return saved;
   },
 
   [TOGGLE_ARTIST_MONITORED]: (getState, payload, dispatch) => {

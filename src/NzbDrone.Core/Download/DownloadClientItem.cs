@@ -26,6 +26,7 @@ namespace NzbDrone.Core.Download
         public bool CanBeRemoved { get; set; }
         public bool Removed { get; set; }
         public List<string> TargetRecordingIds { get; set; }
+        public bool IsFullAlbumRequest { get; set; }
 
         public DownloadClientItem Clone()
         {

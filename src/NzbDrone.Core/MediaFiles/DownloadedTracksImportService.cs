@@ -322,6 +322,15 @@ namespace NzbDrone.Core.MediaFiles
 
             var extension = Path.GetExtension(fileInfo.Name);
 
+            if (FileExtensions.ArchiveExtensions.Contains(extension.ToLowerInvariant()))
+            {
+                const string message = "Download is still packed in an archive. Extract it in the download staging folder, then retry importing the extracted folder.";
+                return new List<ImportResult>
+                {
+                    new ImportResult(new ImportDecision<LocalTrack>(new LocalTrack { Path = fileInfo.FullName }, new Rejection(message)), message)
+                };
+            }
+
             if (extension.IsNullOrWhiteSpace() || !MediaFileExtensions.Extensions.Contains(extension))
             {
                 _logger.Debug("[{0}] has an unsupported extension: '{1}'", fileInfo.FullName, extension);

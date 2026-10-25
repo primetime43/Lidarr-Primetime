@@ -13,6 +13,31 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport.Specifications
     public class MonitoredTrackSpecificationFixture : CoreTest<MonitoredTrackSpecification>
     {
         [Test]
+        public void should_accept_unmonitored_songs_when_the_whole_album_was_requested()
+        {
+            var track = new LocalTrack { Tracks = new List<Track> { new Track { Monitored = false } } };
+
+            Subject.IsSatisfiedBy(track, new DownloadClientItem { IsFullAlbumRequest = true }).Accepted.Should().BeTrue();
+        }
+
+        [Test]
+        public void should_still_limit_a_targeted_download_even_if_it_carries_the_full_album_flag()
+        {
+            var track = new LocalTrack { Tracks = new List<Track> { new Track { Monitored = false, ForeignRecordingId = "other" } } };
+            var download = new DownloadClientItem { IsFullAlbumRequest = true, TargetRecordingIds = new List<string> { "wanted" } };
+
+            Subject.IsSatisfiedBy(track, download).Accepted.Should().BeFalse();
+        }
+
+        [Test]
+        public void should_not_treat_unknown_downloads_as_whole_album_requests()
+        {
+            var track = new LocalTrack { Tracks = new List<Track> { new Track { Monitored = false } } };
+
+            Subject.IsSatisfiedBy(track, new DownloadClientItem()).Accepted.Should().BeFalse();
+        }
+
+        [Test]
         public void should_accept_monitored_track()
         {
             var localTrack = new LocalTrack

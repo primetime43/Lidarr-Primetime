@@ -20,6 +20,7 @@ namespace NzbDrone.Core.Music
         List<Track> TracksWithoutFiles(int albumId);
         void SetFileId(List<Track> tracks);
         void SetMonitored(List<Track> tracks);
+        void UnmonitorArtist(int artistMetadataId);
         void DetachTrackFile(int trackFileId);
     }
 
@@ -127,6 +128,17 @@ namespace NzbDrone.Core.Music
         public void SetMonitored(List<Track> tracks)
         {
             SetFields(tracks, t => t.Monitored);
+        }
+
+        public void UnmonitorArtist(int artistMetadataId)
+        {
+            var tracks = Query(Builder()
+                .Join<Track, AlbumRelease>((track, release) => track.AlbumReleaseId == release.Id)
+                .Join<AlbumRelease, Album>((release, album) => release.AlbumId == album.Id)
+                .Where<Album>(album => album.ArtistMetadataId == artistMetadataId));
+
+            tracks.ForEach(track => track.Monitored = false);
+            SetMonitored(tracks);
         }
 
         public void DetachTrackFile(int trackFileId)

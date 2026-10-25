@@ -453,7 +453,7 @@ namespace NzbDrone.Core.MediaFiles.TrackImport.Manual
                     }
                 }
 
-                var remoteTrackCount = trackedDownload.RemoteAlbum?.MonitoredTrackCount() ?? 1;
+                var remoteTrackCount = trackedDownload.RemoteAlbum?.MonitoredTrackCount(trackedDownload.DownloadItem.IsFullAlbumRequest) ?? 1;
 
                 var importResults = groupedTrackedDownload.Select(c => c.ImportResult).ToList();
                 var importedTrackCount = importResults.Where(c => c.Result == ImportResultType.Imported)

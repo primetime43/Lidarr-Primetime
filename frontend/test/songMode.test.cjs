@@ -29,13 +29,16 @@ function load(file) {
     if (file.includes(`${path.sep}Utilities${path.sep}Table${path.sep}`) && name.startsWith('./')) return load(path.join(path.dirname(file), `${name}.js`));
     if (name === './songSelection') return load(path.join(path.dirname(file), 'songSelection.js'));
     if (name === './trackRowSelection') return load(path.join(path.dirname(file), 'trackRowSelection.js'));
+    if (name === './artistLibraryView') return load(path.join(path.dirname(file), 'artistLibraryView.js'));
     return function Stub() { return null; };
   }
   new Function('require', 'module', 'exports', compiled)(localRequire, module, module.exports);
   return module.exports;
 }
 
-const { createSongSelection, filterSongs, saveSongSelection } = load(path.join(root, 'Artist/Details/songSelection.js'));
+const { createSongSelection, filterSongs, saveSongSelection, downloadSongSelection } = load(path.join(root, 'Artist/Details/songSelection.js'));
+const { getArtistLibraryView, getArtistLibraryViewLink } = load(path.join(root, 'Artist/Details/artistLibraryView.js'));
+const ArtistLibraryViews = load(path.join(root, 'Artist/Details/ArtistLibraryViews.js')).default;
 const ArtistSongs = load(path.join(root, 'Artist/Details/ArtistDetailsTracks.js')).default;
 const QueueRow = load(path.join(root, 'Activity/Queue/QueueRow.js')).default;
 const TrackRow = load(path.join(root, 'Album/Details/TrackRow.js')).default;
@@ -46,7 +49,7 @@ const songs = [
 ];
 
 function panel(save = async () => {}) {
-  const component = new ArtistSongs({ items: songs, onSongsSelectionSave: save });
+  const component = new ArtistSongs({ items: songs, artistSongMode: true, onSongsSelectionSave: save, onSongsDownload: async () => {} });
   component.setState = (update) => Object.assign(component.state, typeof update === 'function' ? update(component.state) : update);
   return component;
 }
@@ -117,7 +120,7 @@ test('monitor save failure never starts a download', async () => {
 test('failed save keeps draft and displays an error for retry', async () => {
   const component = panel(async () => { throw new Error('failed'); });
   component.onSelectedChange({ id: 'two', value: true });
-  await component.onDownloadSelectedPress();
+  await component.onSaveSelectionPress();
   assert.equal(component.state.saveError, true);
   assert.equal(component.state.isSaving, false);
   assert.equal(component.state.selectedState.two, true);
@@ -225,4 +228,91 @@ test('popularity shows a named provider position and source link, without invent
   const unknown = SongPopularityCell({});
   assert.equal(textOf(unknown), '—');
   assert.match(unknown.props.title, /not a quality rating/i);
+});
+
+test('Songs has a direct URL and Albums is the default, independent of artist monitoring', () => {
+  assert.equal(getArtistLibraryView(''), 'albums');
+  assert.equal(getArtistLibraryView('?view=songs'), 'songs');
+  assert.equal(getArtistLibraryView('?view=unexpected'), 'albums');
+  assert.equal(getArtistLibraryViewLink('artist-id', 'songs'), '/artist/artist-id?view=songs');
+  assert.equal(getArtistLibraryViewLink('artist-id', 'albums'), '/artist/artist-id');
+});
+
+function libraryViews(view = 'albums', artistSongMode = false) {
+  const component = new ArtistLibraryViews({
+    artistId: 1, foreignArtistId: 'artist-id', artistName: 'Artist', artistMonitored: true,
+    artistSongMode, view, isPopulated: true, hasTracks: true, isRefreshing: false,
+    onRefreshPress: () => {}, children: React.createElement('span', {}, 'Album cards')
+  });
+  component.setState = (state) => Object.assign(component.state, state);
+  return component;
+}
+
+function childrenOf(element) { return React.Children.toArray(element.props.children); }
+
+test('Albums and Songs navigation is always visible without changing monitoring', () => {
+  for (const artistSongMode of [true, false]) {
+    const component = libraryViews('albums', artistSongMode);
+    const [navigation, albums, songsPanel] = childrenOf(component.render());
+    const links = childrenOf(navigation);
+    assert.deepEqual(links.map(textOf), ['Albums', 'Songs']);
+    assert.equal(links[0].props['aria-current'], 'page');
+    assert.equal(links[1].props.to, '/artist/artist-id?view=songs');
+    assert.equal(links[1].props.onPress, undefined);
+    assert.equal(albums.props.hidden, false);
+    assert.match(textOf(albums), /Album cards/);
+    assert.equal(songsPanel, undefined); // Popularity is loaded only after Songs is opened.
+  }
+});
+
+test('switching views keeps the song panel mounted and album controls available', () => {
+  const component = libraryViews('songs', true);
+  const [, albums, songPanel] = childrenOf(component.render());
+  assert.equal(albums.props.hidden, true);
+  assert.match(textOf(albums), /Album cards/);
+  assert.equal(songPanel.props.hidden, false);
+  component.props = { ...component.props, view: 'albums' };
+  const [, visibleAlbums, hiddenSongs] = childrenOf(component.render());
+  assert.equal(visibleAlbums.props.hidden, false);
+  assert.equal(hiddenSongs.props.hidden, true);
+  assert.equal(hiddenSongs.props.children.type, songPanel.props.children.type);
+  assert.equal(hiddenSongs.props.children.key, songPanel.props.children.key);
+});
+
+test('artists with album monitoring start with an empty song draft without modifying their flags', () => {
+  assert.deepEqual(createSongSelection(songs, false), { one: false, two: false });
+  assert.equal(songs[0].monitored, true);
+  assert.deepEqual(createSongSelection(songs, true), { one: true, two: false });
+});
+
+test('one-time song downloads search only checked representatives and do not touch monitoring', async () => {
+  const calls = [];
+  await downloadSongSelection({ items: songs, selectedState: { two: true }, search: async (ids) => calls.push(ids) });
+  assert.deepEqual(calls, [[2]]);
+  assert.equal(songs[0].monitored, true);
+  assert.equal(songs[1].monitored, false);
+  await downloadSongSelection({ items: songs, selectedState: {}, search: () => assert.fail('empty selection must not search') });
+});
+
+test('Download selected does not save monitoring and a failed search keeps the draft', async () => {
+  const component = panel(() => assert.fail('download must not save monitoring'));
+  component.onSelectedChange({ id: 'two', value: true });
+  component.props.onSongsDownload = async () => { throw new Error('search failed'); };
+  await component.onDownloadSelectedPress();
+  assert.equal(component.state.downloadError, true);
+  assert.equal(component.state.saveError, false);
+  assert.equal(component.state.selectedState.two, true);
+  component.props.onSongsDownload = async () => {};
+  await component.onDownloadSelectedPress();
+  assert.equal(component.state.downloadStarted, true);
+  assert.equal(component.state.isDirty, true); // Downloading did not save the monitoring draft.
+});
+
+test('Songs works for album-monitored artists without requiring a mode change or showing a monitoring-save action', () => {
+  const component = panel();
+  component.props = { ...component.props, artistSongMode: false };
+  const output = textOf(component.render());
+  assert.match(output, /Download selected/);
+  assert.match(output, /Album monitoring stays unchanged/);
+  assert.doesNotMatch(output, /Save monitored songs/);
 });

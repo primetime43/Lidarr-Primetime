@@ -105,6 +105,8 @@ namespace NzbDrone.Core.Download.TrackedDownloads
             {
                 LogItemChange(existingItem, existingItem.DownloadItem, downloadItem);
 
+                downloadItem.TargetRecordingIds = existingItem.DownloadItem.TargetRecordingIds;
+                downloadItem.IsFullAlbumRequest = existingItem.DownloadItem.IsFullAlbumRequest;
                 existingItem.DownloadItem = downloadItem;
                 existingItem.IsTrackable = true;
 
@@ -208,6 +210,9 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                             trackedDownload.RemoteAlbum.TargetRecordingIds = targetRecordingIds;
                         }
                     }
+
+                    trackedDownload.DownloadItem.IsFullAlbumRequest = grabbedEvent != null &&
+                        trackedDownload.DownloadItem.TargetRecordingIds?.Any() != true;
                 }
 
                 if (trackedDownload.RemoteAlbum != null)

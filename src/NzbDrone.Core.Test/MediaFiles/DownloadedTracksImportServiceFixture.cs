@@ -452,6 +452,26 @@ namespace NzbDrone.Core.Test.MediaFiles
             result.First().Result.Should().Be(ImportResultType.Rejected);
         }
 
+        [Test]
+        public void should_explain_archive_extraction_instead_of_treating_the_archive_as_audio()
+        {
+            GivenValidArtist();
+            var archivePath = _audioFiles.First().Replace(".ext", ".RAR");
+            GivenAudioFiles(new[] { archivePath }, 10);
+
+            var result = Subject.ProcessPath(archivePath, ImportMode.Copy);
+
+            result.Should().ContainSingle();
+            result[0].Result.Should().Be(ImportResultType.Rejected);
+            result[0].Errors.Should().ContainSingle().Which.Should().Contain("Extract it in the download staging folder");
+            Mocker.GetMock<IImportApprovedTracks>().Verify(service => service.Import(
+                It.IsAny<List<ImportDecision<LocalTrack>>>(),
+                It.IsAny<bool>(),
+                It.IsAny<DownloadClientItem>(),
+                It.IsAny<ImportMode>()),
+                Times.Never());
+        }
+
         private void VerifyNoImport()
         {
             Mocker.GetMock<IImportApprovedTracks>().Verify(c => c.Import(It.IsAny<List<ImportDecision<LocalTrack>>>(), true, null, ImportMode.Auto),

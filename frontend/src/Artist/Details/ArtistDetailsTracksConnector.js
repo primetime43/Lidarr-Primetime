@@ -9,7 +9,7 @@ import { executeCommand } from 'Store/Actions/commandActions';
 import { toggleTracksMonitored } from 'Store/Actions/trackActions';
 import createAjaxRequest from 'Utilities/createAjaxRequest';
 import ArtistDetailsTracks from './ArtistDetailsTracks';
-import { saveSongSelection } from './songSelection';
+import { downloadSongSelection, saveSongSelection } from './songSelection';
 
 const albumTypePriority = {
   Album: 0,
@@ -131,13 +131,20 @@ class ArtistDetailsTracksConnector extends Component {
     });
   };
 
-  onSongsSelectionSave = (selectedState, download) => {
+  onSongsDownload = (selectedState) => {
+    return downloadSongSelection({
+      items: this.props.items,
+      selectedState,
+      search: (trackIds) => this.props.executeCommand({ name: commandNames.TRACK_SEARCH, trackIds })
+    });
+  };
+
+  onSongsSelectionSave = (selectedState) => {
     return saveSongSelection({
       items: this.props.items,
       selectedState,
       monitor: (trackIds, monitored) => this.props.toggleTracksMonitored({ trackIds, monitored }),
-      enableArtist: () => (this.props.artistMonitored ? undefined : this.props.toggleArtistMonitored({ artistId: this.props.artistId, monitored: true })),
-      search: download ? (trackIds) => this.props.executeCommand({ name: commandNames.TRACK_SEARCH, trackIds }) : null
+      enableArtist: () => (this.props.artistMonitored ? undefined : this.props.toggleArtistMonitored({ artistId: this.props.artistId, monitored: true }))
     });
   };
 
@@ -148,6 +155,7 @@ class ArtistDetailsTracksConnector extends Component {
         items={this.props.items.map((item) => ({ ...item, popularity: this.state.popularityByRecordingId[item.groupKey] }))}
         popularityStatus={this.state.popularityStatus}
         onSongsSelectionSave={this.onSongsSelectionSave}
+        onSongsDownload={this.onSongsDownload}
       />
     );
   }
@@ -157,6 +165,7 @@ ArtistDetailsTracksConnector.propTypes = {
   artistId: PropTypes.number.isRequired,
   artistName: PropTypes.string.isRequired,
   artistMonitored: PropTypes.bool.isRequired,
+  artistSongMode: PropTypes.bool.isRequired,
   executeCommand: PropTypes.func.isRequired,
   toggleArtistMonitored: PropTypes.func.isRequired,
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
